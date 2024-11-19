@@ -12,8 +12,6 @@ use xilem_web::{
     DomFragment, DomView,
 };
 
-use super::AppState;
-
 pub fn slider(value: f64, min: f64, max: f64, step: f64) -> impl DomView<f64> {
     input(())
         .attr("value", value)
@@ -34,15 +32,15 @@ pub fn slider(value: f64, min: f64, max: f64, step: f64) -> impl DomView<f64> {
         })
 }
 
-pub fn labeled_valued(
-    label: impl DomFragment<AppState>,
-    edit: impl DomFragment<AppState>,
-    value: impl DomFragment<AppState>,
-) -> impl DomFragment<AppState> {
+pub fn labeled_valued<T: 'static>(
+    label: impl DomFragment<T>,
+    edit: impl DomFragment<T>,
+    value: impl DomFragment<T>,
+) -> impl DomFragment<T> {
     (span(label).class("label"), edit, span(value).class("label"))
 }
 
-pub fn spacer() -> impl DomView<AppState> {
+pub fn spacer<T: 'static>() -> impl DomView<T> {
     div(()).class("spacer")
 }
 

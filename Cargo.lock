@@ -161,6 +161,7 @@ name = "hyperbez_toy"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "arrayvec",
  "console_error_panic_hook",
  "half",
  "nalgebra",

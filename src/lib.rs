@@ -3,5 +3,7 @@
 #[path = "hb_utils.rs"]
 pub mod hb;
 
+pub mod hb_extra;
+
 pub mod lut;
 pub use lut::Lut;
