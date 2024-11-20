@@ -128,7 +128,7 @@ impl HyperbezParams {
         let dp1 = p2 - Point::new(1., 0.);
         // let th0 = Math.atan2(-dy0, dx0);
         // let th1 = Math.atan2(-dy1, -dx1);
-        let th0 = -dp0.atan2();
+        let th0 = -(dp0.atan2());
         let th1 = (-dp1).atan2();
         let tens0 = dp0.hypot() / chord * 1.5 * (th0.cos() + 1.);
         let tens1 = dp1.hypot() / chord * 1.5 * (th1.cos() + 1.);

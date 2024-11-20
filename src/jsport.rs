@@ -5,7 +5,7 @@ use xilem_web::{
         svg::{g, svg},
     },
     interfaces::*,
-    svg::kurbo::{self, Affine, Circle, Line, ParamCurve, Point, Rect, Shape, Size, Vec2},
+    svg::kurbo::{self, Affine, Circle, Line, ParamCurve, Point, Shape, Size, Vec2},
     DomView,
 };
 
@@ -19,8 +19,20 @@ pub(crate) struct AppState {
     p1: Point,
     p2: Point,
 
+    sheet_origin: Point,
+    sheet_zoom: f64,
     hovered_s: Option<f64>,
-    drag: ControlDrag,
+    drag: DragElement,
+}
+
+impl AppState {
+    fn sheet_scale(&self, e: &web_sys::MouseEvent) -> f64 {
+        let sheet = e
+            .current_target()
+            .unwrap()
+            .unchecked_into::<web_sys::Element>();
+        self.sheet_zoom * 1200. / sheet.client_width() as f64
+    }
 }
 
 impl Default for AppState {
@@ -28,16 +40,18 @@ impl Default for AppState {
         Self {
             p1: Point::new(50., 200.),
             p2: Point::new(150., 200.),
+            sheet_origin: Point::new(-350., -450.),
+            sheet_zoom: 1.,
             hovered_s: None,
-            drag: ControlDrag::None,
+            drag: DragElement::None,
         }
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
-enum ControlDrag {
-    #[default]
+#[derive(Debug, PartialEq, Eq)]
+enum DragElement {
     None,
+    Sheet,
     P0,
     P1,
 }
@@ -93,15 +107,19 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let control0 = Affine::FLIP_Y * state.p1;
     let control0 = (
         Line::new((0., 0.), control0),
-        Circle::new(control0, NODE_RADIUS)
-            .on_mousedown(|state: &mut AppState, _| state.drag = ControlDrag::P0),
+        Circle::new(control0, NODE_RADIUS).on_mousedown(|state: &mut AppState, e| {
+            state.drag = DragElement::P0;
+            e.stop_propagation();
+        }),
     );
 
     let control1 = Affine::FLIP_Y * state.p2;
     let control1 = (
         Line::new((base_width, 0.), control1),
-        Circle::new(control1, NODE_RADIUS)
-            .on_mousedown(|state: &mut AppState, _| state.drag = ControlDrag::P1),
+        Circle::new(control1, NODE_RADIUS).on_mousedown(|state: &mut AppState, e| {
+            state.drag = DragElement::P1;
+            e.stop_propagation();
+        }),
     );
 
     let mut hovered_theta = None;
@@ -190,7 +208,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     ))
     .id("plots");
 
-    let sheet_rect = Rect::from_origin_size((-350., -450.), (1200., 900.));
+    let sheet_size = state.sheet_zoom * Size::new(1200., 900.);
     let frag_svg = svg((
         g((control0, control1)).class("control"),
         cubicbez.id("cubicbez"),
@@ -202,28 +220,50 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
         "viewBox",
         format!(
             "{} {} {} {}",
-            sheet_rect.x0,
-            sheet_rect.y0,
-            sheet_rect.width(),
-            sheet_rect.height(),
+            state.sheet_origin.x, state.sheet_origin.y, sheet_size.width, sheet_size.height,
         ),
     )
-    .on_mouseup(|state: &mut AppState, _| state.drag = ControlDrag::None)
+    .on_mousedown(|state: &mut AppState, _| state.drag = DragElement::Sheet)
+    .on_mouseup(|state: &mut AppState, _| state.drag = DragElement::None)
     .on_mousemove(move |state: &mut AppState, e| {
-        let sheet = e
-            .current_target()
-            .unwrap()
-            .unchecked_into::<web_sys::Element>();
-        let scale = sheet_rect.width() / sheet.client_width() as f64;
+        if let DragElement::None = state.drag {
+            return;
+        };
+
+        let scale = state.sheet_scale(&e);
         let p = Affine::FLIP_Y
-            * Affine::scale(scale).then_translate(sheet_rect.origin().to_vec2())
+            * Affine::scale(scale).then_translate(state.sheet_origin.to_vec2())
             * Point::new(e.offset_x() as f64, e.offset_y() as f64);
         tracing::trace!(?p);
-        if let ControlDrag::P0 = state.drag {
-            state.p1 = p;
-        } else if let ControlDrag::P1 = state.drag {
-            state.p2 = p;
+
+        match state.drag {
+            DragElement::P0 => state.p1 = p,
+            DragElement::P1 => state.p2 = p,
+            DragElement::Sheet => {
+                let delta = scale * Vec2::new(e.movement_x() as f64, e.movement_y() as f64);
+                tracing::trace!(?delta);
+                state.sheet_origin -= delta
+            }
+            DragElement::None => unreachable!(),
         }
+    })
+    .on_wheel(|state: &mut AppState, e| {
+        e.prevent_default();
+
+        let factor = if e.delta_y() > 0. {
+            1.25
+        } else if e.delta_y() < 0. {
+            0.8
+        } else {
+            1.
+        };
+
+        let origin_delta = (factor - 1.)
+            * state.sheet_scale(&e)
+            * Vec2::new(e.offset_x() as f64, e.offset_y() as f64);
+        tracing::trace!(factor, ?origin_delta);
+        state.sheet_origin -= origin_delta;
+        state.sheet_zoom *= factor;
     });
 
     div((
