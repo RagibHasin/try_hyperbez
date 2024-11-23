@@ -15,6 +15,7 @@ use crate::*;
 
 use components::*;
 
+#[derive(Debug, PartialEq)]
 pub(crate) struct AppState {
     p1: Point,
     p2: Point,
@@ -264,7 +265,8 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
         tracing::trace!(factor, ?origin_delta);
         state.sheet_origin -= origin_delta;
         state.sheet_zoom *= factor;
-    });
+    })
+    .passive(false);
 
     div((
         div((div(frag_results).id("ui"), frag_plots)).id("pane-left"),
