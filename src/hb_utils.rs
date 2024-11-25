@@ -2,13 +2,15 @@ use core::f64;
 use std::ops::Range;
 
 use approx::AbsDiffEq;
-use nalgebra::{allocator::Allocator, Complex, DefaultAllocator, Dim, RealField, Vector2, Vector3};
-use num_dual::{hessian, jacobian, Dual2Vec, DualNum, DualVec};
+use nalgebra::{Complex, Vector2, Vector3};
+use num_dual::{hessian, jacobian, DualNum};
 
 use num_traits::NumOps;
 use xilem_web::svg::kurbo::{common::GAUSS_LEGENDRE_COEFFS_32, ParamCurve, Vec2};
 
 pub use spline::hyperbezier::*;
+
+use crate::num_dual_ext::*;
 
 pub fn d_limit(a: f64, b: f64, c: f64) -> Range<f64> {
     if c == 0. {
@@ -115,35 +117,6 @@ pub fn abs_max_theta(hb: &HyperbezParams) -> f64 {
     hb.theta(if (0. ..=1.).contains(&t) { t } else { 1. })
 }
 
-pub trait DualNumExt<T: Copy>: DualNum<T> + Copy {
-    fn re_mut(&mut self) -> &mut T;
-}
-
-impl<T, F, D> DualNumExt<T> for DualVec<T, F, D>
-where
-    T: DualNum<F> + RealField + Copy,
-    D: Dim,
-    DualVec<T, F, D>: DualNum<T> + Copy,
-    DefaultAllocator: Allocator<D>,
-{
-    fn re_mut(&mut self) -> &mut T {
-        &mut self.re
-    }
-}
-
-impl<T, F, D> DualNumExt<T> for Dual2Vec<T, F, D>
-where
-    T: DualNum<F> + RealField + Copy,
-    D: Dim,
-    Dual2Vec<T, F, D>: DualNum<T> + Copy,
-    DefaultAllocator: Allocator<D, D> + Allocator<nalgebra::Const<1>, D>,
-    num_dual::Derivative<T, F, nalgebra::Const<1>, D>: Copy,
-{
-    fn re_mut(&mut self) -> &mut T {
-        &mut self.re
-    }
-}
-
 pub trait Guess {
     type A: Copy;
     type CD: DualNumExt<f64> + NumOps<Self::A>;
@@ -176,17 +149,6 @@ impl<D: DualNumExt<f64>> Guess for (f64, Vector2<D>) {
     fn into_parts(self) -> (Self::A, Self::CD, Self::CD) {
         (self.0, self.1.x, self.1.y)
     }
-}
-
-fn norm_radians<D: DualNumExt<f64>>(mut theta: D) -> D {
-    let re = theta.re_mut();
-    *re = re.rem_euclid(f64::consts::TAU);
-    if *re > f64::consts::PI {
-        *re -= f64::consts::TAU;
-    } else if *re < -f64::consts::PI {
-        *re += f64::consts::TAU;
-    }
-    theta
 }
 
 // pub fn system_for_solving<D: DualNumExt<f64> + NumOps<<G as Guess>::A>, G: Guess<CD = D>>(
@@ -611,6 +573,19 @@ fn list_kappas_for_taus() {
         let kappa = tau_to_kappa(tau);
         println!("{tau:>5.2} => {kappa:>5.3}");
     }
+}
+
+#[test]
+fn test_system() {
+    dbg!(solve_for_params_exact(
+        0.2,
+        f64::consts::PI - 0.2,
+        0.,
+        0.01,
+        [0., 1., -1.],
+        1e-2,
+        10,
+    ));
 }
 
 #[test]

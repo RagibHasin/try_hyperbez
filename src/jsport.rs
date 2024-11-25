@@ -5,7 +5,9 @@ use xilem_web::{
         svg::{g, svg},
     },
     interfaces::*,
-    svg::kurbo::{self, Affine, Circle, Line, ParamCurve, Point, Shape, Size, Vec2},
+    svg::kurbo::{
+        self, Affine, Circle, Line, ParamCurve, ParamCurveDeriv, Point, Shape, Size, Vec2,
+    },
     DomView,
 };
 
@@ -63,6 +65,39 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let p0 = Point::ZERO;
     let p3 = Point::new(base_width, 0.);
     let scale_down = kurbo::TranslateScale::scale(1. / base_width);
+    let cubicbez = kurbo::CubicBez::new(p0, state.p1, state.p2, p3);
+
+    let n_iter = 10;
+    // let (params, n_iter, err, err_type) = match hb_extra::solver::solve_for_params_exact(
+    //     scale_down * cubicbez.eval(0.5),
+    //     cubicbez.deriv().eval(0.5).to_vec2().atan2(),
+    //     state.p1.to_vec2().atan2(),
+    //     (state.p2 - p3).atan2(),
+    //     1e-2,
+    //     n_iter,
+    // ) {
+    //     Ok(s) => (
+    //         hb_extra::HyperbezParams::new(s.params.x, s.params.y, s.params.z, s.params.w, 1.),
+    //         s.iter,
+    //         [s.err.x, s.err.y, s.err.z, s.err.w],
+    //         "None",
+    //     ),
+    //     Err(hb_extra::solver::SolveError::Singularity { guess, iter }) => (
+    //         hb_extra::HyperbezParams::new(guess.x, guess.y, guess.z, guess.w, 1.),
+    //         iter,
+    //         [0.; 4],
+    //         "Singularity",
+    //     ),
+    //     Err(hb_extra::solver::SolveError::OutOfIteration { guess, err }) => (
+    //         hb_extra::HyperbezParams::new(guess.x, guess.y, guess.z, guess.w, 1.),
+    //         n_iter,
+    //         [err.x, err.y, err.z, err.w],
+    //         "OOI",
+    //     ),
+    // };
+
+    // tracing::trace!(?params, n_iter, ?err, err_type);
+
     let params =
         hb_extra::HyperbezParams::from_control(scale_down * state.p1, scale_down * state.p2);
     let hyperbez = hb_extra::Hyperbezier::from_points_params(params, p0, p3);
@@ -73,7 +108,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     //     tracing::trace!(?arg_uv, ?int_theta);
     // }
 
-    let cubicbez = Affine::FLIP_Y * kurbo::CubicBez::new(p0, state.p1, state.p2, p3).into_path(0.);
+    let cubicbez = Affine::FLIP_Y * cubicbez.into_path(0.);
     let accuracy = 0.1;
     let optimize = false;
     let path = Affine::FLIP_Y

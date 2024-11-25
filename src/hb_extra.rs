@@ -1,11 +1,13 @@
 //! Representation and computation of hyperbeziers.
 
+use core::f64;
+
 use xilem_web::svg::kurbo;
 
 use arrayvec::ArrayVec;
 use kurbo::{
-    common::GAUSS_LEGENDRE_COEFFS_32, Affine, CurveFitSample, ParamCurve, ParamCurveFit,
-    ParamCurveNearest, Point, Vec2,
+    common::GAUSS_LEGENDRE_COEFFS_32, Affine, CurveFitSample, ParamCurve, ParamCurveDeriv,
+    ParamCurveFit, ParamCurveNearest, Point, Vec2,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -453,3 +455,407 @@ pub fn solve_thetas(th0: f64, th1: f64, c: f64, d: f64, e: f64) -> [f64; 2] {
     }
     [a, b]
 }
+
+impl HyperbezParams {
+    fn integrate_any<R: std::ops::Add<Output = R> + std::ops::Mul<f64, Output = R>>(
+        &self,
+        f: impl Fn(f64) -> R,
+        init: R,
+        t: f64,
+    ) -> R {
+        // TODO: improve accuracy by subdividing in near-cusp cases
+        let mut xy = init;
+        let u0 = 0.5 * t;
+        for (wi, xi) in GAUSS_LEGENDRE_COEFFS_32 {
+            let u = u0 + u0 * xi;
+            xy = xy + f(u) * *wi;
+        }
+        xy * u0
+    }
+
+    fn denom(&self) -> f64 {
+        2. / (4. * self.c - self.d.powi(2))
+    }
+
+    pub fn dtheta_da(&self, t: f64) -> f64 {
+        let beta1 = -2. * self.denom();
+        -beta1 + (beta1 - 2. * self.d * t) / self.q(t).sqrt()
+    }
+
+    pub fn dtheta_db(&self, t: f64) -> f64 {
+        let beta0 = self.d * self.denom();
+        -beta0 + (beta0 - 4. * self.c * t) / self.q(t).sqrt()
+    }
+
+    pub fn dtheta_dc(&self, t: f64) -> f64 {
+        let denom = self.denom();
+        let term1 = 2. * self.num0 * denom;
+        let term2 = -self.int_helper(t) * t.powi(2) / (2. * self.q(t));
+        let term3 = 2. * denom * (-self.int_helper(t) + self.b * t / self.q(t).sqrt());
+        term1 + term2 + term3
+    }
+
+    pub fn dtheta_dd(&self, t: f64) -> f64 {
+        let denom = self.denom();
+        let term1 = -self.d * self.num0 * denom;
+        let term2 = -self.b * denom;
+        let term3 = -self.int_helper(t) * t / (2. * self.q(t));
+        let term4 =
+            denom * (self.d * self.int_helper(t) + (self.b - self.a * t) / self.q(t).sqrt());
+        term1 + term2 + term3 + term4
+    }
+
+    pub fn dx_da(&self, t: f64) -> f64 {
+        -self.theta(t).sin() * self.dtheta_da(t)
+    }
+
+    pub fn dx_db(&self, t: f64) -> f64 {
+        -self.theta(t).sin() * self.dtheta_db(t)
+    }
+
+    pub fn dx_dc(&self, t: f64) -> f64 {
+        -self.theta(t).sin() * self.dtheta_dc(t)
+    }
+
+    pub fn dx_dd(&self, t: f64) -> f64 {
+        -self.theta(t).sin() * self.dtheta_dd(t)
+    }
+
+    pub fn dy_da(&self, t: f64) -> f64 {
+        self.theta(t).cos() * self.dtheta_da(t)
+    }
+
+    pub fn dy_db(&self, t: f64) -> f64 {
+        self.theta(t).cos() * self.dtheta_db(t)
+    }
+
+    pub fn dy_dc(&self, t: f64) -> f64 {
+        self.theta(t).cos() * self.dtheta_dc(t)
+    }
+
+    pub fn dy_dd(&self, t: f64) -> f64 {
+        self.theta(t).cos() * self.dtheta_dd(t)
+    }
+
+    // pub fn dp_da(&self, t: f64) -> Vec2 {
+    //     self.integrate_any(|t| Vec2::new(self.dx_da(t), self.dy_da(t)), Vec2::ZERO, t)
+    // }
+
+    // pub fn dp_db(&self, t: f64) -> Vec2 {
+    //     self.integrate_any(|t| Vec2::new(self.dx_db(t), self.dy_db(t)), Vec2::ZERO, t)
+    // }
+
+    // pub fn dp_dc(&self, t: f64) -> Vec2 {
+    //     self.integrate_any(|t| Vec2::new(self.dx_dc(t), self.dy_da(t)), Vec2::ZERO, t)
+    // }
+
+    // pub fn dp_dd(&self, t: f64) -> Vec2 {
+    //     self.integrate_any(|t| Vec2::new(self.dx_dd(t), self.dy_da(t)), Vec2::ZERO, t)
+    // }
+
+    pub fn dp_da(&self, t: f64) -> Vec2 {
+        self.integrate_any(
+            |t| self.dtheta_da(t) * Vec2::from_angle(self.theta(t) + PI_2),
+            Vec2::ZERO,
+            t,
+        )
+    }
+
+    pub fn dp_db(&self, t: f64) -> Vec2 {
+        self.integrate_any(
+            |t| self.dtheta_db(t) * Vec2::from_angle(self.theta(t) + PI_2),
+            Vec2::ZERO,
+            t,
+        )
+    }
+
+    pub fn dp_dc(&self, t: f64) -> Vec2 {
+        self.integrate_any(
+            |t| self.dtheta_dc(t) * Vec2::from_angle(self.theta(t) + PI_2),
+            Vec2::ZERO,
+            t,
+        )
+    }
+
+    pub fn dp_dd(&self, t: f64) -> Vec2 {
+        self.integrate_any(
+            |t| self.dtheta_dd(t) * Vec2::from_angle(self.theta(t) + PI_2),
+            Vec2::ZERO,
+            t,
+        )
+    }
+
+    fn system_for_solving(
+        p0_5_i: kurbo::Point,
+        phi0_5_i: f64,
+        theta1_i: f64,
+        p1_angle_i: f64,
+    ) -> impl Fn([f64; 5]) -> ([f64; 5], [[f64; 5]; 5]) {
+        move |[a, b, c, d, t]: [f64; 5]| -> ([f64; 5], [[f64; 5]; 5]) {
+            let hb = HyperbezParams::new(a, b, c, d, 1.);
+
+            let p1 = hb.integrate(1.);
+            let p1_hypot = p1.hypot();
+            let p0_5 = hb.integrate(t) / p1_hypot;
+            let phi0_5 = hb.theta(t);
+            let theta1 = hb.theta(1.);
+            let p1_angle = p1.atan2();
+
+            let dp1_da = hb.dp_da(1.);
+            let dp1_db = hb.dp_db(1.);
+            let dp1_dc = hb.dp_dc(1.);
+            let dp1_dd = hb.dp_dd(1.);
+
+            let p1_norm = p1.normalize();
+            let dp1_hypot_da = p1_norm.dot(dp1_da);
+            let dp1_hypot_db = p1_norm.dot(dp1_db);
+            let dp1_hypot_dc = p1_norm.dot(dp1_dc);
+            let dp1_hypot_dd = p1_norm.dot(dp1_dd);
+
+            let dp0_5_da = hb.dp_da(t);
+            let dp0_5_db = hb.dp_db(t);
+            let dp0_5_dc = hb.dp_dc(t);
+            let dp0_5_dd = hb.dp_dd(t);
+            let dp0_5_dt = Vec2::from_angle(hb.theta(t)) / p1_hypot;
+
+            let p1_hypot2 = p1.hypot2();
+            let dp0_5_da_x =
+                Vec2::new(p1_hypot, p0_5.x).cross(Vec2::new(dp1_hypot_da, dp0_5_da.x)) / p1_hypot2;
+            let dp0_5_db_x =
+                Vec2::new(p1_hypot, p0_5.x).cross(Vec2::new(dp1_hypot_db, dp0_5_db.x)) / p1_hypot2;
+            let dp0_5_dc_x =
+                Vec2::new(p1_hypot, p0_5.x).cross(Vec2::new(dp1_hypot_dc, dp0_5_dc.x)) / p1_hypot2;
+            let dp0_5_dd_x =
+                Vec2::new(p1_hypot, p0_5.x).cross(Vec2::new(dp1_hypot_dd, dp0_5_dd.x)) / p1_hypot2;
+
+            let dp0_5_da_y =
+                Vec2::new(p1_hypot, p0_5.y).cross(Vec2::new(dp1_hypot_da, dp0_5_da.y)) / p1_hypot2;
+            let dp0_5_db_y =
+                Vec2::new(p1_hypot, p0_5.y).cross(Vec2::new(dp1_hypot_db, dp0_5_db.y)) / p1_hypot2;
+            let dp0_5_dc_y =
+                Vec2::new(p1_hypot, p0_5.y).cross(Vec2::new(dp1_hypot_dc, dp0_5_dc.y)) / p1_hypot2;
+            let dp0_5_dd_y =
+                Vec2::new(p1_hypot, p0_5.y).cross(Vec2::new(dp1_hypot_dd, dp0_5_dd.y)) / p1_hypot2;
+
+            let dphi0_5_da = hb.dtheta_da(t);
+            let dphi0_5_db = hb.dtheta_db(t);
+            let dphi0_5_dc = hb.dtheta_dc(t);
+            let dphi0_5_dd = hb.dtheta_dd(t);
+            let dphi0_5_dt = hb.kappa(t);
+
+            let dtheta1_da = hb.dtheta_da(1.);
+            let dtheta1_db = hb.dtheta_db(1.);
+            let dtheta1_dc = hb.dtheta_dc(1.);
+            let dtheta1_dd = hb.dtheta_dd(1.);
+            let dtheta1_dt = 0.;
+
+            let dp1_angle_da = p1.cross(dp1_da) / p1_hypot2;
+            let dp1_angle_db = p1.cross(dp1_db) / p1_hypot2;
+            let dp1_angle_dc = p1.cross(dp1_dc) / p1_hypot2;
+            let dp1_angle_dd = p1.cross(dp1_dd) / p1_hypot2;
+            let dp1_angle_dt = 0.;
+
+            let err = [
+                p0_5.x - p0_5_i.x,
+                p0_5.y - p0_5_i.y,
+                norm_radians(phi0_5 - phi0_5_i),
+                norm_radians(theta1 - theta1_i),
+                norm_radians(p1_angle - p1_angle_i),
+            ];
+
+            let jac = [
+                [dp0_5_da_x, dp0_5_db_x, dp0_5_dc_x, dp0_5_dd_x, dp0_5_dt.x],
+                [dp0_5_da_y, dp0_5_db_y, dp0_5_dc_y, dp0_5_dd_y, dp0_5_dt.y],
+                [dphi0_5_da, dphi0_5_db, dphi0_5_dc, dphi0_5_dd, dphi0_5_dt],
+                [dtheta1_da, dtheta1_db, dtheta1_dc, dtheta1_dd, dtheta1_dt],
+                [
+                    dp1_angle_da,
+                    dp1_angle_db,
+                    dp1_angle_dc,
+                    dp1_angle_dd,
+                    dp1_angle_dt,
+                ],
+            ];
+
+            (err, jac)
+        }
+    }
+}
+
+const PI_2: f64 = f64::consts::FRAC_PI_2;
+
+fn norm_radians(mut theta: f64) -> f64 {
+    theta = theta.rem_euclid(f64::consts::TAU);
+    if theta > f64::consts::PI {
+        theta -= f64::consts::TAU;
+    } else if theta < -f64::consts::PI {
+        theta += f64::consts::TAU;
+    }
+    theta
+}
+
+use nalgebra as na;
+
+#[must_use]
+fn solve_iterate_once(
+    p0_5: kurbo::Point,
+    phi0_5: f64,
+    theta1: f64,
+    p1_angle: f64,
+    guess: [f64; 5],
+) -> ([f64; 5], Option<[f64; 5]>) {
+    let (err, jac) = HyperbezParams::system_for_solving(p0_5, phi0_5, theta1, p1_angle)(guess);
+
+    let guess_v = na::Vector5::from_data(na::ArrayStorage([guess]));
+    let err_v = na::Vector5::from_data(na::ArrayStorage([err]));
+    let mut jac_v = na::Matrix5::from_data(na::ArrayStorage(jac)).transpose();
+    let new_guess_v = (err_v.norm_squared().is_finite() && jac_v.try_inverse_mut())
+        .then(|| guess_v - jac_v * err_v);
+
+    (err, new_guess_v.map(|v| v.data.0[0]))
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Solution {
+    pub params: [f64; 5],
+    pub err: [f64; 5],
+    pub iter: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum SolveError {
+    Singularity {
+        guess: [f64; 5],
+        err: [f64; 5],
+        iter: usize,
+    },
+    OutOfIteration {
+        guess: [f64; 5],
+        err: [f64; 5],
+    },
+}
+
+pub fn solve_for_params_exact(
+    p0_5: kurbo::Point,
+    phi0_5: f64,
+    theta0: f64,
+    theta1: f64,
+    mut guess: [f64; 5],
+    threshold: f64,
+    n_iter: usize,
+) -> Result<Solution, SolveError> {
+    if radian_in_line(theta0) && radian_in_line(theta1) {
+        return Ok(Solution {
+            params: [0., 0., 1., -1., 0.5],
+            err: [0.; 5],
+            iter: 0,
+        });
+    }
+
+    let p1_angle = -theta0;
+    let p0_5 = Affine::rotate(p1_angle) * p0_5;
+    let phi0_5 = phi0_5 + p1_angle;
+    let theta1 = theta1 + p1_angle;
+
+    let mut err = [f64::INFINITY; 5];
+    for i in 0..n_iter {
+        let (new_err, new_guess) = solve_iterate_once(p0_5, phi0_5, theta1, p1_angle, guess);
+        let Some(new_guess) = new_guess else {
+            return Err(SolveError::Singularity {
+                guess,
+                err: new_err,
+                iter: i,
+            });
+        };
+        if new_err.iter().all(|e| *e <= threshold) {
+            return Ok(Solution {
+                params: new_guess,
+                err: new_err,
+                iter: i,
+            });
+        }
+        guess = new_guess;
+        err = new_err;
+    }
+    Err(SolveError::OutOfIteration { guess, err })
+}
+
+const EPSILON: f64 = 0.01;
+pub fn radian_in_line(theta: f64) -> bool {
+    approx::AbsDiffEq::abs_diff_eq(&(theta % f64::consts::PI), &0., EPSILON)
+}
+
+pub fn solve_for_cubic(
+    cubicbez: kurbo::CubicBez,
+    guess: [f64; 4],
+    threshold: f64,
+    n_iter: usize,
+) -> Result<Solution, SolveError> {
+    let p0_5 = cubicbez.eval(0.5);
+    let res = solve_for_params_exact(
+        p0_5,
+        cubicbez.deriv().eval(0.5).to_vec2().atan2(),
+        cubicbez.p1.to_vec2().atan2(),
+        (cubicbez.p3 - cubicbez.p2).atan2(),
+        [guess[0], guess[1], guess[2], guess[3], p0_5.x],
+        threshold,
+        n_iter,
+    );
+    dbg!(p0_5);
+    dbg!(res)
+}
+
+mod tests {
+    use super::*;
+
+    #[test]
+    #[allow(unused_must_use)]
+    fn test1() {
+        let cubicbez = kurbo::CubicBez::new(
+            kurbo::Point::ZERO,
+            kurbo::Point::new(0.1, 0.4),
+            kurbo::Point::new(0.3, 0.4),
+            kurbo::Point::new(1., 0.),
+        );
+        // solve_for_cubic(cubicbez, [0., 0., 1., -1., 0.5]);
+        solve_for_cubic(cubicbez, [-1., -1., -1., 1.], 1e-2, 11);
+    }
+
+    #[test]
+    #[allow(unused_must_use)]
+    fn test2() {
+        let cubicbez = kurbo::CubicBez::new(
+            kurbo::Point::ZERO,
+            kurbo::Point::new(0.1, 0.3),
+            kurbo::Point::new(0.3, 0.3),
+            kurbo::Point::new(1., 0.),
+        );
+        solve_for_cubic(cubicbez, [-1., -1., 1., 0.], 1e-2, 11);
+    }
+
+    #[test]
+    #[allow(unused_must_use)]
+    fn test3() {
+        let cubicbez = kurbo::CubicBez::new(
+            kurbo::Point::ZERO,
+            kurbo::Point::new(0., 0.3),
+            kurbo::Point::new(1., 0.3),
+            kurbo::Point::new(1., 0.),
+        );
+        solve_for_cubic(cubicbez, [-1., -1., 1., 0.], 1e-2, 11);
+    }
+
+    #[test]
+    #[allow(unused_must_use)]
+    fn test4() {
+        let cubicbez = kurbo::CubicBez::new(
+            kurbo::Point::ZERO,
+            kurbo::Point::new(0.3, 0.15),
+            kurbo::Point::new(0.7, 0.15),
+            kurbo::Point::new(1., 0.),
+        );
+        solve_for_cubic(cubicbez, [0., -1., -1., 1.], 1e-2, 11);
+    }
+}
+
+pub mod solver;

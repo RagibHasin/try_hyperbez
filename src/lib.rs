@@ -5,5 +5,7 @@ pub mod hb;
 
 pub mod hb_extra;
 
+pub mod num_dual_ext;
+
 pub mod lut;
 pub use lut::Lut;

@@ -32,6 +32,23 @@ pub fn slider(value: f64, min: f64, max: f64, step: f64) -> impl DomView<f64> {
         })
 }
 
+pub fn textbox(value: f64) -> impl DomView<f64> {
+    input(())
+        .attr("value", format!("{:.1}", value))
+        .attr("type", "text")
+        .on_change(|state: &mut f64, e| {
+            if let Ok(val_f64) = e
+                .target()
+                .unwrap()
+                .unchecked_into::<web_sys::HtmlInputElement>()
+                .value()
+                .parse::<f64>()
+            {
+                *state = val_f64;
+            }
+        })
+}
+
 pub fn labeled_valued<T: 'static>(
     label: impl DomFragment<T>,
     edit: impl DomFragment<T>,

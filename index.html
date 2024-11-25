@@ -14,9 +14,23 @@
         height: calc(100vh - 2rem);
       }
 
+      button,
+      input[type="text"] {
+        background: #222;
+        color: #ccc;
+        border: 1px solid #ccc;
+        border-radius: 2px;
+      }
+
       #app-root {
         display: grid;
         grid-template-columns: 2fr 3fr;
+      }
+
+      #toolbar {
+        position: fixed;
+        bottom: 1rem;
+        right: 1rem;
       }
 
       #pane-left {
@@ -41,17 +55,17 @@
         gap: 0.2rem;
       }
 
-      #options .spacer {
+      #options .spacer,
+      #options button {
         grid-column-end: span 3;
       }
 
-      #options button {
-        background: #222;
-        color: #ccc;
-        border: 1px solid #ccc;
-        border-radius: 2px;
-
-        grid-column-end: span 3;
+      #options input[type="text"] {
+        font-family: inherit;
+        text-align: right;
+        background: transparent;
+        border: none;
+        width: 3rem;
       }
 
       .results {

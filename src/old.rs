@@ -324,12 +324,12 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let frag_a = labeled_valued(
         "a: ",
         slider(state.a, -20., 20., 0.2).map_state(move |state: &mut AppState| &mut state.a),
-        format!("{:.1}", state.a),
+        textbox(state.a).map_state(move |state: &mut AppState| &mut state.a),
     );
     let frag_b = labeled_valued(
         "b: ",
         slider(state.b, -20., 20., 0.2).map_state(move |state: &mut AppState| &mut state.b),
-        format!("{:.1}", state.b),
+        textbox(state.b).map_state(move |state: &mut AppState| &mut state.b),
     );
     let frag_c = labeled_valued(
         "c: ",
@@ -347,13 +347,13 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
             };
             r
         }),
-        format!("{:.1}", state.c),
+        textbox(state.c).map_state(move |state: &mut AppState| &mut state.c),
     );
     let frag_d = labeled_valued(
         "d: ",
         slider(state.d, d_limit.start, d_limit.end, 0.1)
             .map_state(move |state: &mut AppState| &mut state.d),
-        format!("{:.1}", state.d),
+        textbox(state.d).map_state(move |state: &mut AppState| &mut state.d),
     );
 
     let frag_optimize = button({

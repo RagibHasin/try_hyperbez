@@ -1,7 +1,12 @@
 // Copyright 2024 Muhammad Ragib Hasin
 // SPDX-License-Identifier: Apache-2.0
 
-use xilem_web::{core::one_of::Either, App, DomView};
+use xilem_web::{
+    core::one_of::Either,
+    elements::html::{button, div},
+    interfaces::Element,
+    App, DomFragment, DomView,
+};
 
 pub mod components;
 
@@ -13,27 +18,42 @@ enum AppState {
     JsPort(jsport::AppState),
 }
 
-fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
-    match state {
-        AppState::Old(state) => {
+fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> {
+    let (app, new) = match state {
+        AppState::Old(state) => (
             Either::A(old::app_logic(state).map_state(|state: &mut AppState| {
                 if let AppState::Old(state) = state {
                     state
                 } else {
                     unreachable!()
                 }
-            }))
-        }
-        AppState::JsPort(state) => {
+            })),
+            false,
+        ),
+        AppState::JsPort(state) => (
             Either::B(jsport::app_logic(state).map_state(|state: &mut AppState| {
                 if let AppState::JsPort(state) = state {
                     state
                 } else {
                     unreachable!()
                 }
-            }))
-        }
-    }
+            })),
+            true,
+        ),
+    };
+
+    let toolbar = div(button(if new { "V1" } else { "V2" }).on_click(
+        move |state: &mut AppState, _| {
+            if new {
+                *state = AppState::Old(old::AppState::default())
+            } else {
+                *state = AppState::JsPort(jsport::AppState::default())
+            }
+        },
+    ))
+    .id("toolbar");
+
+    (app, toolbar)
 }
 
 pub fn main() {
