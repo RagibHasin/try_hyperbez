@@ -3,7 +3,7 @@
 
 use wasm_bindgen::JsCast;
 use xilem_web::{
-    core::one_of::OneOf3,
+    core::one_of::OneOf4,
     elements::html::{div, option, select},
     interfaces::{Element, HtmlOptionElement},
     App, DomFragment, DomView,
@@ -14,17 +14,19 @@ pub mod components;
 mod jsport;
 mod old;
 mod ptan;
+mod ptan_gen;
 
 enum AppState {
     Old(old::AppState),
     JsPort(jsport::AppState),
     PointTangent(ptan::AppState),
+    PointTangentGen(ptan_gen::AppState),
 }
 
 fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> {
     let app = match state {
         AppState::Old(state) => {
-            OneOf3::A(old::app_logic(state).map_state(|state: &mut AppState| {
+            OneOf4::A(old::app_logic(state).map_state(|state: &mut AppState| {
                 if let AppState::Old(state) = state {
                     state
                 } else {
@@ -33,7 +35,7 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> {
             }))
         }
         AppState::JsPort(state) => {
-            OneOf3::B(jsport::app_logic(state).map_state(|state: &mut AppState| {
+            OneOf4::B(jsport::app_logic(state).map_state(|state: &mut AppState| {
                 if let AppState::JsPort(state) = state {
                     state
                 } else {
@@ -42,7 +44,7 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> {
             }))
         }
         AppState::PointTangent(state) => {
-            OneOf3::C(ptan::app_logic(state).map_state(|state: &mut AppState| {
+            OneOf4::C(ptan::app_logic(state).map_state(|state: &mut AppState| {
                 if let AppState::PointTangent(state) = state {
                     state
                 } else {
@@ -50,6 +52,15 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> {
                 }
             }))
         }
+        AppState::PointTangentGen(state) => OneOf4::D(ptan_gen::app_logic(state).map_state(
+            |state: &mut AppState| {
+                if let AppState::PointTangentGen(state) = state {
+                    state
+                } else {
+                    unreachable!()
+                }
+            },
+        )),
     };
 
     let toolbar = div(select((
@@ -62,6 +73,9 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> {
         option("Point · Tangent")
             .value("ptan")
             .selected(matches!(state, AppState::PointTangent(_))),
+        option("Point · Tangent Gen")
+            .value("ptan_gen")
+            .selected(matches!(state, AppState::PointTangentGen(_))),
     ))
     .on_change(move |state: &mut AppState, e| {
         match e
@@ -74,6 +88,7 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> {
             "old" => *state = AppState::Old(old::AppState::default()),
             "jsport" => *state = AppState::JsPort(jsport::AppState::default()),
             "ptan" => *state = AppState::PointTangent(ptan::AppState::default()),
+            "ptan_gen" => *state = AppState::PointTangentGen(ptan_gen::AppState::default()),
             _ => {}
         }
     }))

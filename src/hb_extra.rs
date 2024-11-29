@@ -6,8 +6,8 @@ use xilem_web::svg::kurbo;
 
 use arrayvec::ArrayVec;
 use kurbo::{
-    common::GAUSS_LEGENDRE_COEFFS_32, Affine, CurveFitSample, ParamCurve, ParamCurveDeriv,
-    ParamCurveFit, ParamCurveNearest, Point, Vec2,
+    common::GAUSS_LEGENDRE_COEFFS_32, Affine, CurveFitSample, ParamCurve, ParamCurveFit,
+    ParamCurveNearest, Point, Vec2,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -696,6 +696,8 @@ fn norm_radians(mut theta: f64) -> f64 {
 
 use nalgebra as na;
 
+use crate::utils::radian_in_line;
+
 #[must_use]
 fn solve_iterate_once(
     p0_5: kurbo::Point,
@@ -781,9 +783,6 @@ pub fn solve_for_params_exact(
 }
 
 const EPSILON: f64 = 0.01;
-pub fn radian_in_line(theta: f64) -> bool {
-    approx::AbsDiffEq::abs_diff_eq(&(theta % f64::consts::PI), &0., EPSILON)
-}
 
 #[allow(unused_must_use)]
 mod tests {

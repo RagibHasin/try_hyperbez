@@ -8,10 +8,12 @@ pub fn norm_radians<D: num_dual::DualNum<f64> + Copy>(theta: D) -> D {
     let mut re = theta.re().rem_euclid(f64::consts::TAU);
     if re > f64::consts::PI {
         re -= f64::consts::TAU;
-        // } else if re < -f64::consts::PI {
-        //     re += f64::consts::TAU;
     }
     theta - (re - theta.re())
+}
+
+pub fn radian_in_line(theta: f64) -> bool {
+    (theta % f64::consts::PI).abs() <= 0.01
 }
 
 pub fn solve_helper<R>(p1: Point, p2: Point, solve: impl Fn(CubicBez, f64, usize) -> R) -> R {

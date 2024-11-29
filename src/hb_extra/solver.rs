@@ -1,11 +1,10 @@
 use std::f64;
 
-use approx::AbsDiffEq as _;
 use nalgebra::{Vector2, Vector5};
 use num_dual::{jacobian, DualNum, DualVec64};
-use xilem_web::svg::kurbo::{self, Affine};
+use xilem_web::svg::kurbo;
 
-use kurbo::{common::GAUSS_LEGENDRE_COEFFS_32, ParamCurve, ParamCurveDeriv};
+use kurbo::{common::GAUSS_LEGENDRE_COEFFS_32, Affine};
 
 use crate::utils::*;
 
@@ -296,11 +295,6 @@ pub fn solve_for_params_exact(
         err = new_err;
     }
     Err(SolveError::OutOfIteration { guess, err })
-}
-
-const EPSILON: f64 = 0.01;
-pub fn radian_in_line(theta: f64) -> bool {
-    (theta % f64::consts::PI).abs_diff_eq(&0., EPSILON)
 }
 
 #[must_use]

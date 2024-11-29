@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use web_sys::wasm_bindgen::JsCast;
 use xilem_web::{
     elements::{
@@ -5,7 +7,7 @@ use xilem_web::{
         svg::{g, svg},
     },
     interfaces::*,
-    svg::kurbo::{self, Affine, Circle, Line, ParamCurve, Point, Rect, Size, Vec2},
+    svg::kurbo::{self, Affine, Circle, Line, ParamCurve, Point, Size, Vec2},
     DomView,
 };
 
@@ -24,8 +26,20 @@ pub(crate) struct AppState {
     optimize: bool,
     accuracy_order: f64,
 
+    sheet_origin: Point,
+    sheet_zoom: f64,
     hovered_s: Option<f64>,
-    drag: ControlDrag,
+    drag: DragElement,
+}
+
+impl AppState {
+    fn sheet_scale(&self, e: &web_sys::MouseEvent) -> f64 {
+        let sheet = e
+            .current_target()
+            .unwrap()
+            .unchecked_into::<web_sys::Element>();
+        self.sheet_zoom * 1200. / sheet.client_width() as f64
+    }
 }
 
 impl Default for AppState {
@@ -37,27 +51,41 @@ impl Default for AppState {
             d: 1.,
             optimize: false,
             accuracy_order: 1.,
+            sheet_origin: Point::new(-350., -450.),
+            sheet_zoom: 1.,
             hovered_s: None,
-            drag: ControlDrag::None,
+            drag: DragElement::None,
         }
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
-enum ControlDrag {
-    #[default]
+#[derive(Debug, PartialEq, Eq)]
+enum DragElement {
     None,
-    P0,
-    P1,
+    Sheet,
+}
+
+pub fn d_limit(a: f64, b: f64, c: f64) -> Range<f64> {
+    if c == 0. {
+        return -1.0..10.;
+    }
+    let end = 2. * c.abs().sqrt();
+    let start = -end / (b * c - a).abs().log10().max(4. / 3.);
+    start..end
+}
+
+pub fn d_limit_rounded(a: f64, b: f64, c: f64) -> Range<f64> {
+    let d_limit = d_limit(a, b, c);
+    ((d_limit.start * 10.).ceil() / 10.)..(((d_limit.end - f64::EPSILON) * 10.).floor() / 10.)
 }
 
 pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
-    let d_limit = hb::d_limit_rounded(state.a, state.b, state.c);
+    let d_limit = d_limit_rounded(state.a, state.b, state.c);
     state.d = state.d.clamp(d_limit.start, d_limit.end);
 
     let base_width = 500.;
-    let hyperbez = hb::Hyperbezier::from_points_params(
-        hb::HyperbezParams::new(state.a, state.b, state.c, state.d),
+    let hyperbez = hb_extra::Hyperbezier::from_points_params(
+        hb_extra::HyperbezParams::new(state.a, state.b, state.c, state.d, 1.),
         Point::ZERO,
         Point::new(base_width, 0.),
     );
@@ -90,11 +118,6 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let kappa0 = *kappa.first().unwrap();
     let kappa1 = *kappa.last().unwrap();
 
-    let qoppa0 = hb::qoppa(hyperbez.params(), 0.);
-    let qoppa1 = hb::qoppa(hyperbez.params(), 1.);
-    let ka_qo0 = hb::frac_kappa_qoppa(hyperbez.params(), 0.);
-    let ka_qo1 = hb::frac_kappa_qoppa(hyperbez.params(), 1.);
-
     const NODE_RADIUS: f64 = 5.;
     let points = path
         .elements()
@@ -102,65 +125,6 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
         .filter_map(|e| e.end_point())
         .map(|p| Circle::new(p, NODE_RADIUS))
         .collect::<Vec<_>>();
-
-    let tension0 = hb::tension(&hyperbez, 0.);
-    let control0 = Affine::FLIP_Y * (tension0 * Vec2::from_angle(theta0.to_radians())).to_point();
-    let control0 = (
-        Line::new((0., 0.), control0),
-        Circle::new(control0, NODE_RADIUS)
-            .on_mousedown(|state: &mut AppState, _| state.drag = ControlDrag::P0),
-    );
-
-    let tension1 = hb::tension(&hyperbez, 1.);
-    let control1 = Affine::FLIP_Y
-        * (Point::new(base_width, 0.) - tension1 * Vec2::from_angle(theta1.to_radians()));
-    let control1 = (
-        Line::new((base_width, 0.), control1),
-        Circle::new(control1, NODE_RADIUS)
-            .on_mousedown(|state: &mut AppState, _| state.drag = ControlDrag::P1),
-    );
-
-    let trigon0 = {
-        let apex = Affine::FLIP_Y
-            * (hb::hypo_of_qoppa(&hyperbez, 0.) * Vec2::from_angle(theta0.to_radians())).to_point();
-        let mut trigon = kurbo::BezPath::new();
-        trigon.move_to((0., 0.));
-        trigon.line_to((apex.x, 0.));
-        trigon.line_to(apex);
-        trigon.class("area-qoppa")
-    };
-
-    let trigon1 = {
-        let base1 = Point::new(base_width, 0.);
-        let apex = Affine::FLIP_Y
-            * (base1 - hb::hypo_of_qoppa(&hyperbez, 1.) * Vec2::from_angle(theta1.to_radians()));
-        let mut trigon = kurbo::BezPath::new();
-        trigon.move_to(base1);
-        trigon.line_to((apex.x, 0.));
-        trigon.line_to(apex);
-        trigon.class("area-qoppa")
-    };
-
-    let horton0 = {
-        let apex = Affine::FLIP_Y
-            * (hb::dust_of_ka_qo(&hyperbez, 0.) * Vec2::from_angle(theta0.to_radians())).to_point();
-        let mut horton = kurbo::BezPath::new();
-        horton.move_to((0., 0.));
-        horton.line_to((apex.x, 0.));
-        horton.line_to(apex);
-        horton.class("area-kappa-qoppa")
-    };
-
-    let horton1 = {
-        let base1 = Point::new(base_width, 0.);
-        let apex = Affine::FLIP_Y
-            * (base1 - hb::dust_of_ka_qo(&hyperbez, 1.) * Vec2::from_angle(theta1.to_radians()));
-        let mut horton = kurbo::BezPath::new();
-        horton.move_to(base1);
-        horton.line_to((apex.x, 0.));
-        horton.line_to(apex);
-        horton.class("area-kappa-qoppa")
-    };
 
     let mut hovered_theta = None;
     let mut hovered_kappa = None;
@@ -197,11 +161,6 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let frag_kappa1 = labeled_valued("κ₁: ", (), format!("{:.3}", kappa1));
     let frag_n_points = labeled_valued("n: ", (), points.len());
 
-    let frag_qoppa0 = labeled_valued("ϟ₀: ", (), format!("{:.3}", qoppa0));
-    let frag_qoppa1 = labeled_valued("ϟ₁: ", (), format!("{:.3}", qoppa1));
-    let frag_ka_qo0 = labeled_valued("κ₀/ϟ₀: ", (), format!("{:.3}", ka_qo0));
-    let frag_ka_qo1 = labeled_valued("κ₁/ϟ₁: ", (), format!("{:.3}", ka_qo1));
-
     let empty = "~".to_string();
     let frag_hovered_s = labeled_valued(
         "s: ",
@@ -234,18 +193,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
             frag_n_points,
         ))
         .class("results"),
-        div((
-            frag_qoppa0,
-            frag_qoppa1,
-            spacer(),
-            frag_ka_qo0,
-            frag_ka_qo1,
-            spacer(),
-            frag_hovered_s,
-            frag_hovered_theta,
-            frag_hovered_kappa,
-        ))
-        .class("results"),
+        div((frag_hovered_s, frag_hovered_theta, frag_hovered_kappa)).class("results"),
     );
 
     let plot_size = Size::new(760., 270.);
@@ -257,69 +205,56 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     ))
     .id("plots");
 
-    let sheet_rect = Rect::from_origin_size((-350., -450.), (1200., 900.));
-    let frag_svg = svg((
-        g((trigon0, trigon1, horton0, horton1, control0, control1)).class("control"),
-        path.id("hyperbez"),
-        hover_mark,
-        g(points).id("nodes"),
-    ))
-    .attr(
-        "viewBox",
-        format!(
-            "{} {} {} {}",
-            sheet_rect.x0,
-            sheet_rect.y0,
-            sheet_rect.width(),
-            sheet_rect.height(),
-        ),
-    )
-    .on_mouseup(|state: &mut AppState, _| state.drag = ControlDrag::None)
-    .on_mousemove(move |state: &mut AppState, e| {
-        let sheet = e
-            .current_target()
-            .unwrap()
-            .unchecked_into::<web_sys::Element>();
-        let scale = sheet_rect.width() / sheet.client_width() as f64;
-        let p = Affine::FLIP_Y
-            * Affine::scale(scale)
-                .then_translate(sheet_rect.origin().to_vec2())
-                .then_scale(1. / base_width)
-            * Point::new(e.offset_x() as f64, e.offset_y() as f64);
-        if let ControlDrag::P0 = state.drag {
-            let control0 = p.to_vec2();
-            let theta0 = control0.angle();
-            let kappa0 = hb::tau_to_kappa(control0.hypot());
-            let theta1 = theta1.to_radians();
-            tracing::trace!(?control0, theta0, kappa0, theta1, kappa1);
-            let soln = hb::solve_for_params_inferred(theta0, theta1, kappa0, kappa1, 1e-4, 10);
-            tracing::trace!(?soln);
-            if let [Ok(params), ..] = soln {
-                tracing::trace!(?params);
+    let sheet_size = state.sheet_zoom * Size::new(1200., 900.);
+    let frag_svg = svg((path.id("hyperbez"), hover_mark, g(points).id("nodes")))
+        .attr(
+            "viewBox",
+            format!(
+                "{} {} {} {}",
+                state.sheet_origin.x, state.sheet_origin.y, sheet_size.width, sheet_size.height,
+            ),
+        )
+        .on_mousedown(|state: &mut AppState, _| state.drag = DragElement::Sheet)
+        .on_mouseup(|state: &mut AppState, _| state.drag = DragElement::None)
+        .on_mousemove(move |state: &mut AppState, e| {
+            if let DragElement::None = state.drag {
+                return;
+            };
 
-                state.a = params.a();
-                state.b = params.b();
-                state.c = params.c();
-                state.d = params.d();
-            }
-        } else if let ControlDrag::P1 = state.drag {
-            let control1 = Vec2::new(1., 0.) - p.to_vec2();
-            let theta1 = control1.angle();
-            let kappa1 = hb::tau_to_kappa(control1.hypot());
-            let theta0 = theta0.to_radians();
-            tracing::trace!(?control1, theta0, kappa0, theta1, kappa1);
-            let soln = hb::solve_for_params_inferred(theta0, theta1, kappa0, kappa1, 1e-4, 10);
-            tracing::trace!(?soln);
-            if let [Ok(params), ..] = soln {
-                tracing::trace!(?params);
+            let scale = state.sheet_scale(&e);
+            let p = Affine::FLIP_Y
+                * Affine::scale(scale).then_translate(state.sheet_origin.to_vec2())
+                * Point::new(e.offset_x() as f64, e.offset_y() as f64);
+            tracing::trace!(?p);
 
-                state.a = params.a();
-                state.b = params.b();
-                state.c = params.c();
-                state.d = params.d();
+            match state.drag {
+                DragElement::Sheet => {
+                    let delta = scale * Vec2::new(e.movement_x() as f64, e.movement_y() as f64);
+                    tracing::trace!(?delta);
+                    state.sheet_origin -= delta
+                }
+                DragElement::None => unreachable!(),
             }
-        }
-    });
+        })
+        .on_wheel(|state: &mut AppState, e| {
+            e.prevent_default();
+
+            let factor = if e.delta_y() > 0. {
+                1.25
+            } else if e.delta_y() < 0. {
+                0.8
+            } else {
+                1.
+            };
+
+            let origin_delta = (factor - 1.)
+                * state.sheet_scale(&e)
+                * Vec2::new(e.offset_x() as f64, e.offset_y() as f64);
+            tracing::trace!(factor, ?origin_delta);
+            state.sheet_origin -= origin_delta;
+            state.sheet_zoom *= factor;
+        })
+        .passive(false);
 
     let frag_a = labeled_valued(
         "a: ",
