@@ -767,7 +767,7 @@ pub fn solve_for_params_exact(
                 iter: i,
             });
         };
-        if new_err.iter().all(|e| *e <= threshold) {
+        if new_err.iter().all(|e| e.abs() <= threshold) {
             return Ok(Solution {
                 params: new_guess,
                 err: new_err,
@@ -785,76 +785,81 @@ pub fn radian_in_line(theta: f64) -> bool {
     approx::AbsDiffEq::abs_diff_eq(&(theta % f64::consts::PI), &0., EPSILON)
 }
 
-pub fn solve_for_cubic(
-    cubicbez: kurbo::CubicBez,
-    guess: [f64; 4],
-    threshold: f64,
-    n_iter: usize,
-) -> Result<Solution, SolveError> {
-    let p0_5 = cubicbez.eval(0.5);
-    let res = solve_for_params_exact(
-        p0_5,
-        cubicbez.deriv().eval(0.5).to_vec2().atan2(),
-        cubicbez.p1.to_vec2().atan2(),
-        (cubicbez.p3 - cubicbez.p2).atan2(),
-        [guess[0], guess[1], guess[2], guess[3], p0_5.x],
-        threshold,
-        n_iter,
-    );
-    dbg!(p0_5);
-    dbg!(res)
-}
-
+#[allow(unused_must_use)]
 mod tests {
     use super::*;
+    use crate::utils::*;
 
     #[test]
-    #[allow(unused_must_use)]
+
     fn test1() {
-        let cubicbez = kurbo::CubicBez::new(
-            kurbo::Point::ZERO,
+        solve_helper(
             kurbo::Point::new(0.1, 0.4),
             kurbo::Point::new(0.3, 0.4),
-            kurbo::Point::new(1., 0.),
+            solve_with_guess(solve_for_params_exact, [-1., -1., -1., 1.]),
         );
         // solve_for_cubic(cubicbez, [0., 0., 1., -1., 0.5]);
-        solve_for_cubic(cubicbez, [-1., -1., -1., 1.], 1e-2, 11);
     }
 
     #[test]
-    #[allow(unused_must_use)]
+
     fn test2() {
-        let cubicbez = kurbo::CubicBez::new(
-            kurbo::Point::ZERO,
+        solve_helper(
             kurbo::Point::new(0.1, 0.3),
             kurbo::Point::new(0.3, 0.3),
-            kurbo::Point::new(1., 0.),
+            solve_with_guess(solve_for_params_exact, [-1., -1., 1., 0.]),
         );
-        solve_for_cubic(cubicbez, [-1., -1., 1., 0.], 1e-2, 11);
     }
 
     #[test]
-    #[allow(unused_must_use)]
+
     fn test3() {
-        let cubicbez = kurbo::CubicBez::new(
-            kurbo::Point::ZERO,
+        solve_helper(
             kurbo::Point::new(0., 0.3),
             kurbo::Point::new(1., 0.3),
-            kurbo::Point::new(1., 0.),
+            solve_with_guess(solve_for_params_exact, [-1., -1., 1., 0.]),
         );
-        solve_for_cubic(cubicbez, [-1., -1., 1., 0.], 1e-2, 11);
     }
 
     #[test]
-    #[allow(unused_must_use)]
+
     fn test4() {
-        let cubicbez = kurbo::CubicBez::new(
-            kurbo::Point::ZERO,
+        solve_helper(
             kurbo::Point::new(0.3, 0.15),
             kurbo::Point::new(0.7, 0.15),
-            kurbo::Point::new(1., 0.),
+            solve_with_guess(solve_for_params_exact, [0., -1., -1., 1.]),
         );
-        solve_for_cubic(cubicbez, [0., -1., -1., 1.], 1e-2, 11);
+    }
+
+    #[test]
+
+    fn test5() {
+        solve_helper(
+            kurbo::Point::new(0.3, 0.15),
+            kurbo::Point::new(0.7, 0.15),
+            solve_with_guess(solve_for_params_exact, [-1., -1., 1., 0.]),
+        );
+    }
+
+    #[test]
+    fn listy() {
+        use std::io::Write;
+        let mut file = std::io::BufWriter::new(
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(r#"D:\Projects\Long\Playground\try_hyperbez\listy_big.csv"#)
+                .unwrap(),
+        );
+        for b in (0..=200).map(|i| -20. + i as f64 * 0.2) {
+            for a in (0..=200).map(|i| -20. + i as f64 * 0.2) {
+                let hb = HyperbezParams::new(a, b, -1., 1., 1.);
+                let theta1 = hb.theta(1.);
+                let p1_arg = hb.integrate(1.).atan2();
+                writeln!(&mut file, "{a:.1},{b:.1},{p1_arg:.3},{theta1:.3}");
+            }
+        }
     }
 }
 

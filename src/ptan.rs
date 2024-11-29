@@ -18,7 +18,6 @@ use components::*;
 #[derive(Debug, PartialEq)]
 pub(crate) struct AppState {
     p1: Point,
-    p2: Point,
 
     sheet_origin: Point,
     sheet_zoom: f64,
@@ -40,7 +39,6 @@ impl Default for AppState {
     fn default() -> Self {
         Self {
             p1: Point::new(50., 200.),
-            p2: Point::new(150., 200.),
             sheet_origin: Point::new(-350., -450.),
             sheet_zoom: 1.,
             hovered_s: None,
@@ -61,12 +59,42 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let base_width = 500.;
 
     let p0 = Point::ZERO;
+    let p2 = Point::new(base_width - state.p1.x, state.p1.y);
     let p3 = Point::new(base_width, 0.);
     let scale_down = kurbo::TranslateScale::scale(1. / base_width);
-    let cubicbez = kurbo::CubicBez::new(p0, state.p1, state.p2, p3);
+    let cubicbez = kurbo::CubicBez::new(p0, state.p1, p2, p3);
 
-    let params =
-        hb_extra::HyperbezParams::from_control(scale_down * state.p1, scale_down * state.p2);
+    let (params, raw_params, n_iter, err, err_type) = match utils::solve_helper(
+        scale_down * state.p1,
+        scale_down * p2,
+        utils::solve_inferring(hb_extra::solver::solve_for_params_exact),
+    ) {
+        Ok(s) => (
+            hb_extra::HyperbezParams::new(s.params.x, s.params.y, s.params.z, s.params.w, 1.),
+            s.params.data.0[0],
+            s.iter,
+            [s.err.x, s.err.y, s.err.z, s.err.w],
+            "None",
+        ),
+        Err(hb_extra::solver::SolveError::Singularity { guess, err, iter }) => (
+            hb_extra::HyperbezParams::new(0., -1., -1., 1., 1.),
+            guess.data.0[0],
+            iter,
+            [err.x, err.y, err.z, err.w],
+            "Singularity",
+        ),
+        Err(hb_extra::solver::SolveError::OutOfIteration { guess, err }) => (
+            hb_extra::HyperbezParams::new(0., -1., -1., 1., 1.),
+            guess.data.0[0],
+            11,
+            [err.x, err.y, err.z, err.w],
+            "OOI",
+        ),
+    };
+
+    tracing::trace!(?raw_params, n_iter, ?err, err_type);
+
+    // let params = hb_extra::HyperbezParams::from_control(scale_down * state.p1, scale_down * p2);
     let hyperbez = hb_extra::Hyperbezier::from_points_params(params, p0, p3);
 
     // {
@@ -116,7 +144,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
         }),
     );
 
-    let control1 = Affine::FLIP_Y * state.p2;
+    let control1 = Affine::FLIP_Y * p2;
     let control1 = (
         Line::new((base_width, 0.), control1),
         Circle::new(control1, NODE_RADIUS).on_mousedown(|state: &mut AppState, e| {
@@ -237,11 +265,10 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
         let p = Affine::FLIP_Y
             * Affine::scale(scale).then_translate(state.sheet_origin.to_vec2())
             * Point::new(e.offset_x() as f64, e.offset_y() as f64);
-        tracing::trace!(?p);
 
         match state.drag {
             DragElement::P0 => state.p1 = p,
-            DragElement::P1 => state.p2 = p,
+            DragElement::P1 => state.p1 = Point::new(base_width - p.x, p.y),
             DragElement::Sheet => {
                 let delta = scale * Vec2::new(e.movement_x() as f64, e.movement_y() as f64);
                 tracing::trace!(?delta);

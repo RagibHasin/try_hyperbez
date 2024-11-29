@@ -31,10 +31,10 @@ pub(crate) struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         Self {
-            a: -1.,
+            a: 0.,
             b: -1.,
-            c: 1.,
-            d: 0.,
+            c: -1.,
+            d: 1.,
             optimize: false,
             accuracy_order: 1.,
             hovered_s: None,

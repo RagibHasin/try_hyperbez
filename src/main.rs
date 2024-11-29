@@ -1,10 +1,11 @@
 // Copyright 2024 Muhammad Ragib Hasin
 // SPDX-License-Identifier: Apache-2.0
 
+use wasm_bindgen::JsCast;
 use xilem_web::{
-    core::one_of::Either,
-    elements::html::{button, div},
-    interfaces::Element,
+    core::one_of::OneOf3,
+    elements::html::{div, option, select},
+    interfaces::{Element, HtmlOptionElement},
     App, DomFragment, DomView,
 };
 
@@ -12,45 +13,70 @@ pub mod components;
 
 mod jsport;
 mod old;
+mod ptan;
 
 enum AppState {
     Old(old::AppState),
     JsPort(jsport::AppState),
+    PointTangent(ptan::AppState),
 }
 
 fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> {
-    let (app, new) = match state {
-        AppState::Old(state) => (
-            Either::A(old::app_logic(state).map_state(|state: &mut AppState| {
+    let app = match state {
+        AppState::Old(state) => {
+            OneOf3::A(old::app_logic(state).map_state(|state: &mut AppState| {
                 if let AppState::Old(state) = state {
                     state
                 } else {
                     unreachable!()
                 }
-            })),
-            false,
-        ),
-        AppState::JsPort(state) => (
-            Either::B(jsport::app_logic(state).map_state(|state: &mut AppState| {
+            }))
+        }
+        AppState::JsPort(state) => {
+            OneOf3::B(jsport::app_logic(state).map_state(|state: &mut AppState| {
                 if let AppState::JsPort(state) = state {
                     state
                 } else {
                     unreachable!()
                 }
-            })),
-            true,
-        ),
+            }))
+        }
+        AppState::PointTangent(state) => {
+            OneOf3::C(ptan::app_logic(state).map_state(|state: &mut AppState| {
+                if let AppState::PointTangent(state) = state {
+                    state
+                } else {
+                    unreachable!()
+                }
+            }))
+        }
     };
 
-    let toolbar = div(button(if new { "V1" } else { "V2" }).on_click(
-        move |state: &mut AppState, _| {
-            if new {
-                *state = AppState::Old(old::AppState::default())
-            } else {
-                *state = AppState::JsPort(jsport::AppState::default())
-            }
-        },
+    let toolbar = div(select((
+        option("Explorer")
+            .value("old")
+            .selected(matches!(state, AppState::Old(_))),
+        option("JavaScript port")
+            .value("jsport")
+            .selected(matches!(state, AppState::JsPort(_))),
+        option("Point · Tangent")
+            .value("ptan")
+            .selected(matches!(state, AppState::PointTangent(_))),
     ))
+    .on_change(move |state: &mut AppState, e| {
+        match e
+            .target()
+            .unwrap()
+            .unchecked_into::<web_sys::HtmlSelectElement>()
+            .value()
+            .as_ref()
+        {
+            "old" => *state = AppState::Old(old::AppState::default()),
+            "jsport" => *state = AppState::JsPort(jsport::AppState::default()),
+            "ptan" => *state = AppState::PointTangent(ptan::AppState::default()),
+            _ => {}
+        }
+    }))
     .id("toolbar");
 
     (app, toolbar)
@@ -74,6 +100,10 @@ pub fn main() {
         .with(perf_layer)
         .init();
 
-    let state = AppState::JsPort(Default::default());
-    App::new(xilem_web::document_body(), state, app_logic).run();
+    App::new(
+        xilem_web::document_body(),
+        AppState::PointTangent(Default::default()),
+        app_logic,
+    )
+    .run();
 }

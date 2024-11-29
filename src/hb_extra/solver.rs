@@ -2,12 +2,12 @@ use std::f64;
 
 use approx::AbsDiffEq as _;
 use nalgebra::{Vector2, Vector5};
-use num_dual::jacobian;
+use num_dual::{jacobian, DualNum, DualVec64};
 use xilem_web::svg::kurbo::{self, Affine};
 
 use kurbo::{common::GAUSS_LEGENDRE_COEFFS_32, ParamCurve, ParamCurveDeriv};
 
-use crate::num_dual_ext::*;
+use crate::utils::*;
 
 #[derive(Clone, Copy, Debug)]
 pub struct HyperbezParams<D> {
@@ -21,7 +21,7 @@ pub struct HyperbezParams<D> {
     num1: D,
 }
 
-impl<D: DualNumExt<f64>> HyperbezParams<D> {
+impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
     /// Create a new hyperbezier with the given parameters.
     pub fn new(a: D, b: D, c: D, d: D, e: D) -> Self {
         let denom = D::from(2.) / (c * 4. - d * d);
@@ -182,7 +182,7 @@ impl<D: DualNumExt<f64>> HyperbezParams<D> {
     }
 }
 
-fn system_for_solving<D: DualNumExt<f64>>(
+fn system_for_solving<D: DualNum<f64> + Copy>(
     p0_5_i: kurbo::Point,
     phi0_5_i: f64,
     theta1_i: f64,
@@ -228,7 +228,7 @@ fn solve_iterate_once(
     // jac.transpose_mut();
     // dbg!(&f, &jac);
     let new_guess =
-        (f.norm_squared().is_finite() && jac.try_inverse_mut()).then(|| guess + jac * f);
+        (f.norm_squared().is_finite() && jac.try_inverse_mut()).then(|| guess - jac * f);
     (f, new_guess)
 }
 
@@ -303,75 +303,186 @@ pub fn radian_in_line(theta: f64) -> bool {
     (theta % f64::consts::PI).abs_diff_eq(&0., EPSILON)
 }
 
-pub fn solve_for_cubic(
-    cubicbez: kurbo::CubicBez,
-    guess: [f64; 4],
-    threshold: f64,
-    n_iter: usize,
-) -> Result<Solution, SolveError> {
-    let p0_5 = cubicbez.eval(0.5);
-    let res = solve_for_params_exact(
-        p0_5,
-        cubicbez.deriv().eval(0.5).to_vec2().atan2(),
-        cubicbez.p1.to_vec2().atan2(),
-        (cubicbez.p3 - cubicbez.p2).atan2(),
-        [guess[0], guess[1], guess[2], guess[3], p0_5.x],
-        threshold,
-        n_iter,
+#[must_use]
+fn solve_iterate_once_for_ab(
+    theta1: f64,
+    p1_angle: f64,
+    guess: Vector2<f64>,
+) -> (Vector2<f64>, Option<Vector2<f64>>) {
+    let (f, mut jac) = jacobian(
+        |guess: Vector2<DualVec64<nalgebra::U2>>| {
+            let guess = Vector5::new(
+                guess.x,
+                guess.y,
+                DualVec64::from_re(-1.),
+                DualVec64::from_re(1.),
+                DualVec64::from_re(0.5),
+            );
+            let result = system_for_solving(kurbo::Point::ZERO, 0., theta1, p1_angle)(guess);
+            Vector2::new(result.w, result.a)
+        },
+        guess,
     );
-    dbg!(p0_5);
-    dbg!(res)
+    // jac.transpose_mut();
+    // dbg!(&f, &jac);
+    let new_guess =
+        (f.norm_squared().is_finite() && jac.try_inverse_mut()).then(|| guess - jac * f);
+    (f, new_guess)
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct GuessAB {
+    pub params: Vector2<f64>,
+    pub err: Vector2<f64>,
+    pub iter: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum GuessABError {
+    Singularity {
+        guess: Vector2<f64>,
+        err: Vector2<f64>,
+        iter: usize,
+    },
+    OutOfIteration {
+        guess: Vector2<f64>,
+        err: Vector2<f64>,
+    },
+}
+
+pub fn solve_for_ab_exact(theta0: f64, theta1: f64) -> Result<GuessAB, GuessABError> {
+    if radian_in_line(theta0) && radian_in_line(theta1) {
+        return Ok(GuessAB {
+            params: Vector2::new(0., 0.),
+            err: Vector2::zeros(),
+            iter: 0,
+        });
+    }
+
+    let p1_angle = -theta0;
+    let theta1 = theta1 + p1_angle;
+
+    let mut guess = Vector2::new(0., theta1 * 2.5);
+    let mut err = Vector2::from_data(nalgebra::ArrayStorage([[f64::INFINITY; 2]]));
+    for i in 0..5 {
+        let (new_err, new_guess) = solve_iterate_once_for_ab(theta1, p1_angle, guess);
+        let Some(new_guess) = new_guess else {
+            return Err(GuessABError::Singularity {
+                guess,
+                err: new_err,
+                iter: i,
+            });
+        };
+        if new_err.iter().all(|e| e.abs() < 1e-2) {
+            return Ok(GuessAB {
+                params: new_guess,
+                err: new_err,
+                iter: i,
+            });
+        }
+        guess = new_guess;
+        err = new_err;
+    }
+    Err(GuessABError::OutOfIteration { guess, err })
+}
+
+#[allow(unused_must_use)]
 mod tests {
     use super::*;
 
     #[test]
-    #[allow(unused_must_use)]
     fn test1() {
-        let cubicbez = kurbo::CubicBez::new(
-            kurbo::Point::ZERO,
+        solve_helper(
             kurbo::Point::new(0.1, 0.4),
             kurbo::Point::new(0.3, 0.4),
-            kurbo::Point::new(1., 0.),
+            // solve_with_guess(solve_for_params_exact, [-1., -1., -1., 1.]),
+            solve_with_guess(solve_for_params_exact, [3.4, -3., 1., -1.]),
         );
         // solve_for_cubic(cubicbez, [0., 0., 1., -1., 0.5]);
-        solve_for_cubic(cubicbez, [-1., -1., 1., 0.], 1e-2, 11);
     }
 
     #[test]
-    #[allow(unused_must_use)]
+    fn test1_1() {
+        solve_helper(
+            kurbo::Point::new(0.1, 0.4),
+            kurbo::Point::new(0.3, 0.4),
+            // solve_with_guess(solve_for_params_exact, [-1., -1., -1., 1.]),
+            // solve_with_guess(solve_for_params_exact, [5.3, -5., -1., 1.]),
+            solve_with_guess(solve_for_params_exact, [2.8, -2.2, 2.2, -2.2]),
+        );
+        // solve_for_cubic(cubicbez, [0., 0., 1., -1., 0.5]);
+    }
+
+    #[test]
     fn test2() {
-        let cubicbez = kurbo::CubicBez::new(
-            kurbo::Point::ZERO,
+        solve_helper(
             kurbo::Point::new(0.1, 0.3),
             kurbo::Point::new(0.3, 0.3),
-            kurbo::Point::new(1., 0.),
+            solve_with_guess(solve_for_params_exact, [-1., -1., 1., 0.]),
         );
-        solve_for_cubic(cubicbez, [-1., -1., 1., 0.], 1e-2, 11);
     }
 
     #[test]
-    #[allow(unused_must_use)]
     fn test3() {
-        let cubicbez = kurbo::CubicBez::new(
-            kurbo::Point::ZERO,
+        solve_helper(
             kurbo::Point::new(0., 0.3),
             kurbo::Point::new(1., 0.3),
-            kurbo::Point::new(1., 0.),
+            solve_with_guess(solve_for_params_exact, [-1., -1., 1., 0.]),
         );
-        solve_for_cubic(cubicbez, [-1., -1., 1., 0.], 1e-2, 11);
     }
 
     #[test]
-    #[allow(unused_must_use)]
     fn test4() {
-        let cubicbez = kurbo::CubicBez::new(
-            kurbo::Point::ZERO,
+        solve_helper(
             kurbo::Point::new(0.3, 0.15),
             kurbo::Point::new(0.7, 0.15),
-            kurbo::Point::new(1., 0.),
+            solve_with_guess(solve_for_params_exact, [0., -1., -1., 1.]),
         );
-        solve_for_cubic(cubicbez, [-1., -1., 1., 0.], 1e-3, 11);
+    }
+
+    #[test]
+    fn test5() {
+        solve_helper(
+            kurbo::Point::new(0.3, 0.15),
+            kurbo::Point::new(0.7, 0.15),
+            solve_with_guess(solve_for_params_exact, [-1., -1., 1., 0.]),
+        );
+    }
+
+    #[test]
+    fn test6() {
+        solve_helper(
+            kurbo::Point::new(0.3, 0.15),
+            kurbo::Point::new(0.7, 0.15),
+            solve_with_guess(solve_for_params_exact, [0., -0.7, 1., -1.]),
+        );
+    }
+
+    #[test]
+    fn test7() {
+        solve_helper(
+            kurbo::Point::new(0.3, 0.15),
+            kurbo::Point::new(0.7, 0.15),
+            solve_inferring(solve_for_params_exact),
+        );
+    }
+
+    #[test]
+    fn test8() {
+        solve_helper(
+            kurbo::Point::new(0.3, 0.25),
+            kurbo::Point::new(0.7, 0.25),
+            solve_inferring(solve_for_params_exact),
+        );
+    }
+
+    #[test]
+    fn test9() {
+        solve_helper(
+            kurbo::Point::new(0.1, 0.4),
+            kurbo::Point::new(0.3, 0.4),
+            solve_inferring(solve_for_params_exact),
+        );
+        // solve_for_cubic(cubicbez, [0., 0., 1., -1., 0.5]);
     }
 }

@@ -10,7 +10,7 @@ use xilem_web::svg::kurbo::{common::GAUSS_LEGENDRE_COEFFS_32, ParamCurve, Vec2};
 
 pub use spline::hyperbezier::*;
 
-use crate::num_dual_ext::*;
+use crate::utils::*;
 
 pub fn d_limit(a: f64, b: f64, c: f64) -> Range<f64> {
     if c == 0. {
@@ -119,13 +119,13 @@ pub fn abs_max_theta(hb: &HyperbezParams) -> f64 {
 
 pub trait Guess {
     type A: Copy;
-    type CD: DualNumExt<f64> + NumOps<Self::A>;
+    type CD: DualNum<f64> + NumOps<Self::A> + Copy;
 
     fn from_parts(a: Self::CD, c: Self::CD, d: Self::CD) -> Self;
     fn into_parts(self) -> (Self::A, Self::CD, Self::CD);
 }
 
-impl<D: DualNumExt<f64>> Guess for Vector3<D> {
+impl<D: DualNum<f64> + Copy> Guess for Vector3<D> {
     type A = D;
     type CD = D;
 
@@ -138,7 +138,7 @@ impl<D: DualNumExt<f64>> Guess for Vector3<D> {
     }
 }
 
-impl<D: DualNumExt<f64>> Guess for (f64, Vector2<D>) {
+impl<D: DualNum<f64> + Copy> Guess for (f64, Vector2<D>) {
     type A = f64;
     type CD = D;
 
@@ -152,7 +152,7 @@ impl<D: DualNumExt<f64>> Guess for (f64, Vector2<D>) {
 }
 
 // pub fn system_for_solving<D: DualNumExt<f64> + NumOps<<G as Guess>::A>, G: Guess<CD = D>>(
-pub fn system_for_solving<G: Guess<CD: DualNumExt<f64>>>(
+pub fn system_for_solving<G: Guess<CD: DualNum<f64>>>(
     theta0_i: f64,
     theta1_i: f64,
     kappa0_i: f64,
