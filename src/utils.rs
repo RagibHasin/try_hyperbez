@@ -53,19 +53,42 @@ pub fn solve_inferring<R: std::fmt::Debug>(
     solve_exact: impl Copy + Fn(Point, f64, f64, f64, [f64; 5], f64, usize) -> R,
 ) -> impl Fn(CubicBez, f64, usize) -> R {
     move |cb, threshold, n_iter| {
+        let p0_5 = cb.eval(0.5);
+        let phi0_5 = cb.deriv().eval(0.5).to_vec2().atan2();
         let theta0 = cb.p1.to_vec2().atan2();
         let theta1 = (cb.p3 - cb.p2).atan2();
 
-        let s = solver::solve_for_ab_exact(theta0, theta1);
-        dbg!(s);
+        let guess_t = (p0_5.x * theta1.abs() + 0.5 * theta0.abs()) / (theta1.abs() + theta0.abs());
+        let cdt = solver::solve_for_cdt_exact(p0_5, phi0_5, [0., -1., -1., 1., guess_t], 1e-2, 5);
+        tracing::trace!(?cdt);
 
-        // let xho = 1. / (theta0 / theta1 + 0.34) + 1. / 0.64;
+        let [guess_c, guess_d, guess_t] = if let Ok(solver::Solution { params, .. }) = cdt {
+            params.data.0[0]
+        } else {
+            [-1., 1., guess_t]
+        };
+        dbg!(guess_c, guess_d, guess_t);
+
+        let guess_q1_sqrt = (guess_c + guess_d + 1.).sqrt();
+        let guess_b = (theta1 - theta0) * (-4. * guess_c + guess_d.powi(2))
+            / (2. * guess_d - (4. * guess_c + 2. * guess_d) / guess_q1_sqrt);
+        // let guess_b = (-4 c T + d^2 T)/(2 d - (4 c)/Sqrt[1 + c + d] - (2 d)/Sqrt[1 + c + d]);
+
+        let s = solver::solve_for_ab_exact(
+            theta0,
+            theta1,
+            [0., guess_b, guess_c, guess_d, guess_t],
+            1e-2,
+            5,
+        );
+        tracing::trace!(?s);
+
         let a_b = 1.5625 + theta1 / (theta0 + theta1 * 0.34);
         let b = (theta1 - theta0) * 5. / (2. * a_b + 4.);
         let a = a_b * b;
         // let guess = [0., theta1 * 2.5, -1., 1.];
 
-        let guess = if let Ok(solver::GuessAB { params, .. }) = s {
+        let guess = if let Ok(solver::Solution { params, .. }) = s {
             [params.x, params.y, -1., 1.]
         } else {
             [a, b, -1., 1.]

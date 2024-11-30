@@ -1,6 +1,6 @@
 use std::f64;
 
-use nalgebra::{Vector2, Vector5};
+use nalgebra::{SVector, Vector2, Vector3, Vector5};
 use num_dual::{jacobian, DualNum, DualVec64};
 use xilem_web::svg::kurbo;
 
@@ -69,21 +69,21 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
         self.eval_q(t)[0]
     }
 
-    fn report_endpoints(&self) -> [D; 2] {
-        let mut sum = D::from(0.);
-        for (wi, xi) in GAUSS_LEGENDRE_COEFFS_32 {
-            // for (let i = 0; i < co.length; i += 2) {
-            // let xi = co[i + 1];
-            // let wi = co[i];
-            let t = 0.5 + 0.5 * xi;
-            let q = self.q(D::from(t));
-            sum += q.powf(-1.5) * *wi;
-        }
-        let integral = sum * 0.5;
-        let q0 = self.q(D::from(0.));
-        let q1 = self.q(D::from(1.));
-        [q0.powf(-1.5) / integral, q1.powf(-1.5) / integral]
-    }
+    // fn report_endpoints(&self) -> [D; 2] {
+    //     let mut sum = D::from(0.);
+    //     for (wi, xi) in GAUSS_LEGENDRE_COEFFS_32 {
+    //         // for (let i = 0; i < co.length; i += 2) {
+    //         // let xi = co[i + 1];
+    //         // let wi = co[i];
+    //         let t = 0.5 + 0.5 * xi;
+    //         let q = self.q(D::from(t));
+    //         sum += q.powf(-1.5) * *wi;
+    //     }
+    //     let integral = sum * 0.5;
+    //     let q0 = self.q(D::from(0.));
+    //     let q1 = self.q(D::from(1.));
+    //     [q0.powf(-1.5) / integral, q1.powf(-1.5) / integral]
+    // }
 
     /// Evaluate the position of the raw curve.
     ///
@@ -232,24 +232,26 @@ fn solve_iterate_once(
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Solution {
-    pub params: Vector5<f64>,
-    pub err: Vector5<f64>,
+pub struct Solution<const N: usize> {
+    pub params: SVector<f64, N>,
+    pub err: SVector<f64, N>,
     pub iter: usize,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum SolveError {
+pub enum SolveError<const N: usize> {
     Singularity {
         guess: Vector5<f64>,
-        err: Vector5<f64>,
+        err: SVector<f64, N>,
         iter: usize,
     },
     OutOfIteration {
         guess: Vector5<f64>,
-        err: Vector5<f64>,
+        err: SVector<f64, N>,
     },
 }
+
+pub type SolveResult<const N: usize> = Result<Solution<N>, SolveError<N>>;
 
 pub fn solve_for_params_exact(
     p0_5: kurbo::Point,
@@ -259,7 +261,7 @@ pub fn solve_for_params_exact(
     guess: [f64; 5],
     threshold: f64,
     n_iter: usize,
-) -> Result<Solution, SolveError> {
+) -> SolveResult<5> {
     if radian_in_line(theta0) && radian_in_line(theta1) {
         return Ok(Solution {
             params: Vector5::new(0., 0., 1., -1., 0.5),
@@ -301,52 +303,36 @@ pub fn solve_for_params_exact(
 fn solve_iterate_once_for_ab(
     theta1: f64,
     p1_angle: f64,
-    guess: Vector2<f64>,
+    guess: Vector5<f64>,
 ) -> (Vector2<f64>, Option<Vector2<f64>>) {
     let (f, mut jac) = jacobian(
-        |guess: Vector2<DualVec64<nalgebra::U2>>| {
-            let guess = Vector5::new(
-                guess.x,
-                guess.y,
-                DualVec64::from_re(-1.),
-                DualVec64::from_re(1.),
-                DualVec64::from_re(0.5),
-            );
-            let result = system_for_solving(kurbo::Point::ZERO, 0., theta1, p1_angle)(guess);
+        |guess_i: Vector2<DualVec64<nalgebra::U2>>| {
+            let result =
+                system_for_solving(kurbo::Point::ZERO, 0., theta1, p1_angle)(Vector5::new(
+                    guess_i.x,
+                    guess_i.y,
+                    guess.z.into(),
+                    guess.w.into(),
+                    guess.a.into(),
+                ));
             Vector2::new(result.w, result.a)
         },
-        guess,
+        guess.xy(),
     );
-    // jac.transpose_mut();
-    // dbg!(&f, &jac);
     let new_guess =
-        (f.norm_squared().is_finite() && jac.try_inverse_mut()).then(|| guess - jac * f);
+        (f.norm_squared().is_finite() && jac.try_inverse_mut()).then(|| guess.xy() - jac * f);
     (f, new_guess)
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct GuessAB {
-    pub params: Vector2<f64>,
-    pub err: Vector2<f64>,
-    pub iter: usize,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum GuessABError {
-    Singularity {
-        guess: Vector2<f64>,
-        err: Vector2<f64>,
-        iter: usize,
-    },
-    OutOfIteration {
-        guess: Vector2<f64>,
-        err: Vector2<f64>,
-    },
-}
-
-pub fn solve_for_ab_exact(theta0: f64, theta1: f64) -> Result<GuessAB, GuessABError> {
+pub fn solve_for_ab_exact(
+    theta0: f64,
+    theta1: f64,
+    guess: [f64; 5],
+    threshold: f64,
+    n_iter: usize,
+) -> SolveResult<2> {
     if radian_in_line(theta0) && radian_in_line(theta1) {
-        return Ok(GuessAB {
+        return Ok(Solution {
             params: Vector2::new(0., 0.),
             err: Vector2::zeros(),
             iter: 0,
@@ -356,28 +342,94 @@ pub fn solve_for_ab_exact(theta0: f64, theta1: f64) -> Result<GuessAB, GuessABEr
     let p1_angle = -theta0;
     let theta1 = theta1 + p1_angle;
 
-    let mut guess = Vector2::new(0., theta1 * 2.5);
+    let mut guess = Vector5::from_data(nalgebra::ArrayStorage([guess]));
     let mut err = Vector2::from_data(nalgebra::ArrayStorage([[f64::INFINITY; 2]]));
-    for i in 0..5 {
+    for i in 0..n_iter {
         let (new_err, new_guess) = solve_iterate_once_for_ab(theta1, p1_angle, guess);
         let Some(new_guess) = new_guess else {
-            return Err(GuessABError::Singularity {
+            return Err(SolveError::Singularity {
                 guess,
                 err: new_err,
                 iter: i,
             });
         };
-        if new_err.iter().all(|e| e.abs() < 1e-2) {
-            return Ok(GuessAB {
+        if new_err.iter().all(|e| e.abs() < threshold) {
+            return Ok(Solution {
                 params: new_guess,
                 err: new_err,
                 iter: i,
             });
         }
-        guess = new_guess;
+        guess.x = new_guess.x;
+        guess.y = new_guess.y;
         err = new_err;
     }
-    Err(GuessABError::OutOfIteration { guess, err })
+    Err(SolveError::OutOfIteration { guess, err })
+}
+
+#[must_use]
+fn solve_iterate_once_for_cdt(
+    p0_5: kurbo::Point,
+    phi0_5: f64,
+    guess: Vector5<f64>,
+) -> (Vector3<f64>, Option<Vector3<f64>>) {
+    let guess_o = Vector3::new(guess.z, guess.w, guess.a);
+    let (f, mut jac) = jacobian(
+        |guess_i: Vector3<DualVec64<nalgebra::U3>>| {
+            let [[p0_5_x_r, p0_5_y_r, phi0_5_r, _, p1_angle_r]] =
+                system_for_solving(kurbo::Point::ZERO, 0., 0., 0.)(Vector5::new(
+                    guess.x.into(),
+                    guess.y.into(),
+                    guess_i.x,
+                    guess_i.y,
+                    guess_i.z,
+                ))
+                .data
+                .0;
+            let p0_5_x_o = p0_5_x_r * p1_angle_r.cos() - p0_5_y_r * p1_angle_r.sin() - p0_5.x;
+            let p0_5_y_o = p0_5_x_r * p1_angle_r.sin() + p0_5_y_r * p1_angle_r.cos() - p0_5.y;
+            let phi0_5_o = phi0_5_r + p1_angle_r - phi0_5;
+
+            Vector3::new(p0_5_x_o, p0_5_y_o, phi0_5_o)
+        },
+        guess_o,
+    );
+    let new_guess =
+        (f.norm_squared().is_finite() && jac.try_inverse_mut()).then(|| guess_o - jac * f);
+    (f, new_guess)
+}
+
+pub fn solve_for_cdt_exact(
+    p0_5: kurbo::Point,
+    phi0_5: f64,
+    guess: [f64; 5],
+    threshold: f64,
+    n_iter: usize,
+) -> SolveResult<3> {
+    let mut guess = Vector5::from_data(nalgebra::ArrayStorage([guess]));
+    let mut err = Vector3::from_data(nalgebra::ArrayStorage([[f64::INFINITY; 3]]));
+    for i in 0..n_iter {
+        let (new_err, new_guess) = solve_iterate_once_for_cdt(p0_5, phi0_5, guess);
+        let Some(new_guess) = new_guess else {
+            return Err(SolveError::Singularity {
+                guess,
+                err: new_err,
+                iter: i,
+            });
+        };
+        if new_err.iter().all(|e| e.abs() < threshold) {
+            return Ok(Solution {
+                params: new_guess,
+                err: new_err,
+                iter: i,
+            });
+        }
+        guess.z = new_guess.x;
+        guess.w = new_guess.y;
+        guess.a = new_guess.z;
+        err = new_err;
+    }
+    Err(SolveError::OutOfIteration { guess, err })
 }
 
 #[allow(unused_must_use)]

@@ -6,8 +6,8 @@ use xilem_web::svg::kurbo;
 
 use arrayvec::ArrayVec;
 use kurbo::{
-    common::GAUSS_LEGENDRE_COEFFS_32, Affine, CurveFitSample, ParamCurve, ParamCurveFit,
-    ParamCurveNearest, Point, Vec2,
+    common::GAUSS_LEGENDRE_COEFFS_32, Affine, CurveFitSample, ParamCurve, ParamCurveFit, Point,
+    Vec2,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -79,21 +79,21 @@ impl HyperbezParams {
         self.eval_q(t)[0]
     }
 
-    fn report_endpoints(&self) -> [f64; 2] {
-        let mut sum = 0.;
-        for (wi, xi) in GAUSS_LEGENDRE_COEFFS_32 {
-            // for (let i = 0; i < co.length; i += 2) {
-            // let xi = co[i + 1];
-            // let wi = co[i];
-            let t = 0.5 + 0.5 * xi;
-            let q = self.eval_q(t)[0];
-            sum += wi * q.powf(-1.5);
-        }
-        let integral = 0.5 * sum;
-        let q0 = self.eval_q(0.)[0];
-        let q1 = self.eval_q(1.)[0];
-        [q0.powf(-1.5) / integral, q1.powf(-1.5) / integral]
-    }
+    // fn report_endpoints(&self) -> [f64; 2] {
+    //     let mut sum = 0.;
+    //     for (wi, xi) in GAUSS_LEGENDRE_COEFFS_32 {
+    //         // for (let i = 0; i < co.length; i += 2) {
+    //         // let xi = co[i + 1];
+    //         // let wi = co[i];
+    //         let t = 0.5 + 0.5 * xi;
+    //         let q = self.eval_q(t)[0];
+    //         sum += wi * q.powf(-1.5);
+    //     }
+    //     let integral = 0.5 * sum;
+    //     let q0 = self.q(0.);
+    //     let q1 = self.q(1.);
+    //     [q0.powf(-1.5) / integral, q1.powf(-1.5) / integral]
+    // }
 
     /// Evaluate the position of the raw curve.
     ///
@@ -153,7 +153,7 @@ impl HyperbezParams {
         k1 += blend * (kmid * ratio - k1);
         let [c, d] = quadratic_for_endk(k0, k1);
         //console.log('dc', dc, 'c', cd.c, 'd', cd.d);
-        let endk = endk_for_quadratic(c, d);
+        // let endk = endk_for_quadratic(c, d);
         // console.log(dc, k0, k1, blend);
         let [a, b] = solve_thetas(th0, th1, c, d, 1.);
         HyperbezParams::new(a, b, c, d, 1.)
@@ -277,23 +277,23 @@ impl ParamCurveFit for Hyperbezier {
     }
 }
 
-impl ParamCurveNearest for Hyperbezier {
-    fn nearest(&self, p: Point, accuracy: f64) -> kurbo::Nearest {
-        let p_local = Affine::translate(self.p0.to_vec2())
-            .then_rotate(-self.scale_rot.angle())
-            .then_scale(1. / self.scale_rot.length())
-            * p;
+// impl ParamCurveNearest for Hyperbezier {
+//     fn nearest(&self, p: Point, accuracy: f64) -> kurbo::Nearest {
+//         let p_local = Affine::translate(self.p0.to_vec2())
+//             .then_rotate(-self.scale_rot.angle())
+//             .then_scale(1. / self.scale_rot.length())
+//             * p;
 
-        // 1. if theta1 < 2pi, check if p_local is in the sweep region between normal0 and normal1
-        //   1a. if true, then subdivide and repeat from 1 for each half
-        //   1b. if false, then either s = 0 or s = 1 is nearest, check and tell
-        // 2. otherwise sibdivide for theta1 = 2pi and repeat from 1
+//         // 1. if theta1 < 2pi, check if p_local is in the sweep region between normal0 and normal1
+//         //   1a. if true, then subdivide and repeat from 1 for each half
+//         //   1b. if false, then either s = 0 or s = 1 is nearest, check and tell
+//         // 2. otherwise sibdivide for theta1 = 2pi and repeat from 1
 
-        if self.params.theta(1.) >= std::f64::consts::TAU {}
+//         if self.params.theta(1.) >= std::f64::consts::TAU {}
 
-        todo!()
-    }
-}
+//         todo!()
+//     }
+// }
 
 /// For curve κ = 1/(1-x^2)^2, in range -x..x, what is the expected height?
 pub fn forward_scale(x: f64) -> f64 {
@@ -344,9 +344,9 @@ pub fn endk_for_quadratic(c: f64, d: f64) -> [f64; 2] {
     let integral = (4. * c + 2. * d) / (dis * (c + d + 1.).sqrt()) - (2. * d / dis);
     let k0 = 1. / integral;
     let k1 = k0 * (c + d + 1.).powf(-1.5);
-    let gamma = (k1 / k0).cbrt();
-    let beta = 1. / (gamma * gamma) - 1.;
-    let inv_k0 = ((-2. * gamma - 2.) * d + 4. * beta * gamma) / (-d * d - 4. * d + 4. * beta);
+    // let gamma = (k1 / k0).cbrt();
+    // let beta = 1. / (gamma * gamma) - 1.;
+    // let inv_k0 = ((-2. * gamma - 2.) * d + 4. * beta * gamma) / (-d * d - 4. * d + 4. * beta);
     //console.log('kk', inv_k0, 1/k0);
     //console.log('qu', 1/k0 * d * d + (-2 * gamma - 2 + 4/k0) * d + 4 * beta * (gamma - 1/k0));
     //console.log('dd', (-2 * gamma - 2) * d + 4 * beta * gamma);
@@ -782,15 +782,12 @@ pub fn solve_for_params_exact(
     Err(SolveError::OutOfIteration { guess, err })
 }
 
-const EPSILON: f64 = 0.01;
-
 #[allow(unused_must_use)]
 mod tests {
     use super::*;
     use crate::utils::*;
 
     #[test]
-
     fn test1() {
         solve_helper(
             kurbo::Point::new(0.1, 0.4),
@@ -801,7 +798,6 @@ mod tests {
     }
 
     #[test]
-
     fn test2() {
         solve_helper(
             kurbo::Point::new(0.1, 0.3),
@@ -811,7 +807,6 @@ mod tests {
     }
 
     #[test]
-
     fn test3() {
         solve_helper(
             kurbo::Point::new(0., 0.3),
@@ -821,7 +816,6 @@ mod tests {
     }
 
     #[test]
-
     fn test4() {
         solve_helper(
             kurbo::Point::new(0.3, 0.15),
@@ -831,7 +825,6 @@ mod tests {
     }
 
     #[test]
-
     fn test5() {
         solve_helper(
             kurbo::Point::new(0.3, 0.15),
