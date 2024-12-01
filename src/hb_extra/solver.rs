@@ -394,15 +394,15 @@ fn solve_iterate_once_for_cdt(
             let p0_5_x_o = p0_5_x_r * theta0_r.cos() - p0_5_y_r * theta0_r.sin() - p0_5.x;
             let p0_5_y_o = p0_5_x_r * theta0_r.sin() + p0_5_y_r * theta0_r.cos() - p0_5.y;
             let phi0_5_o = norm_radians(phi0_5_r + theta0_r - phi0_5);
-            tracing::trace!(
-                ?p0_5_x_r,
-                ?p0_5_y_r,
-                ?phi0_5_r,
-                ?p1_angle_r,
-                ?p0_5_x_o,
-                ?p0_5_y_o,
-                ?phi0_5_o,
-            );
+            // tracing::trace!(
+            //     ?p0_5_x_r,
+            //     ?p0_5_y_r,
+            //     ?phi0_5_r,
+            //     ?p1_angle_r,
+            //     ?p0_5_x_o,
+            //     ?p0_5_y_o,
+            //     ?phi0_5_o,
+            // );
 
             Vector3::new(p0_5_x_o, p0_5_y_o, phi0_5_o)
         },
@@ -454,6 +454,11 @@ pub fn solve_inferring_full(cb: kurbo::CubicBez, threshold: f64, n_iter: usize) 
     let theta0 = c0.atan2();
     let theta1 = c1.atan2();
 
+    let p1_angle_i = -theta0;
+    let p0_5_i = Affine::rotate(p1_angle_i) * p0_5;
+    let phi0_5_i = phi0_5 + p1_angle_i;
+    let theta1_i = theta1 + p1_angle_i;
+
     let [guess_c, guess_d] = {
         let th0 = -theta0;
         let th1 = theta1;
@@ -487,6 +492,7 @@ pub fn solve_inferring_full(cb: kurbo::CubicBez, threshold: f64, n_iter: usize) 
     let mut guess = [0., guess_b, guess_c, guess_d, guess_t];
     tracing::trace!(?guess);
 
+    let mut err = [f64::INFINITY; 5];
     for i in 0..n_iter {
         let cdt = solve_for_cdt_exact(p0_5, phi0_5, guess, 1e-2, 5);
         tracing::trace!(?cdt);
@@ -494,7 +500,7 @@ pub fn solve_inferring_full(cb: kurbo::CubicBez, threshold: f64, n_iter: usize) 
         if let Ok(Solution { params, .. }) = cdt {
             guess = params.data.0[0];
         };
-        guess[1] = make_guess_b(guess_c, guess_d, theta1, theta0);
+        guess[1] = make_guess_b(guess[2], guess[3], theta1, theta0);
         tracing::trace!(?guess);
 
         let s = solve_for_ab_exact(theta0, theta1, guess, threshold, n_iter / 2);
@@ -509,22 +515,27 @@ pub fn solve_inferring_full(cb: kurbo::CubicBez, threshold: f64, n_iter: usize) 
         let p1_r = hb.integrate(1.);
         let p1_angle_r = p1_r.atan2();
         let theta1_r = hb.theta(1.);
-        let p0_5_r = Affine::rotate(-p1_angle_r) * hb.integrate(guess[4]).to_point();
+        let p0_5_r = hb.integrate(guess[4]);
         let phi0_5_r = hb.theta(guess[4]);
 
-        let err = [
-            p0_5_r.x - p0_5.x,
-            p0_5_r.y - p0_5.y,
-            phi0_5_r - p1_angle_r - phi0_5,
-            theta1_r - p1_angle_r - phi0_5,
-            -p1_angle_r - theta0,
-        ];
+        let new_err = [
+            p0_5_r.x - p0_5_i.x,
+            p0_5_r.y - p0_5_i.y,
+            phi0_5_r - phi0_5_i,
+            theta1_r - theta1_i,
+            p1_angle_r - p1_angle_i,
+        ]
+        .map(f64::abs);
 
-        tracing::trace!(i, ?err);
+        tracing::trace!(i, ?err, ?new_err);
 
-        if err.iter().all(|e| e.abs() < threshold) {
+        if new_err.iter().all(|e| *e < threshold)
+            || (0..5).any(|i| new_err[i] > err[i] + threshold.powi(2))
+        {
             break;
         }
+
+        err = new_err;
     }
 
     guess
@@ -689,6 +700,16 @@ mod tests {
         solve_helper(
             kurbo::Point::new(-0.5, 0.5),
             kurbo::Point::new(1.5, 0.5),
+            solve_inferring_full,
+        );
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test15() {
+        solve_helper(
+            kurbo::Point::new(0.1, 0.4),
+            kurbo::Point::new(0.91, 0.4),
             solve_inferring_full,
         );
     }
