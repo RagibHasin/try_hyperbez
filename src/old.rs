@@ -81,7 +81,7 @@ pub fn d_limit_rounded(a: f64, b: f64, c: f64) -> Range<f64> {
 
 pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let d_limit = d_limit_rounded(state.a, state.b, state.c);
-    state.d = state.d.clamp(d_limit.start, d_limit.end);
+    // state.d = state.d.clamp(d_limit.start, d_limit.end);
 
     let base_width = 500.;
     let hyperbez = hb_extra::Hyperbezier::from_points_params(

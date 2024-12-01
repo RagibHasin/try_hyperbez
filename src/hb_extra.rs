@@ -139,11 +139,13 @@ impl HyperbezParams {
         let mut k0 = k_for_tension(tens0);
         let mut k1 = k_for_tension(tens1);
         let cbr = (k0 / k1).powf(1. / 3.);
+        tracing::trace!(th0, th1, d0, d1, tens0, tens1, k0, k1, cbr);
         fn soft(x: f64) -> f64 {
             (0.5 * (1. + x * x)).sqrt()
         }
         k1 /= soft(cbr);
         k0 /= soft(1. / cbr);
+        tracing::trace!(k0, k1);
 
         let dc = (p2 - p1).hypot() / chord;
         let kmid = dc.powf(1.5);
@@ -151,6 +153,7 @@ impl HyperbezParams {
         let blend = 0.5 + 0.5 * (3. - 10. * dc).tanh();
         k0 += blend * (kmid / ratio - k0);
         k1 += blend * (kmid * ratio - k1);
+        tracing::trace!(dc, kmid, ratio, blend, k0, k1);
         let [c, d] = quadratic_for_endk(k0, k1);
         //console.log('dc', dc, 'c', cd.c, 'd', cd.d);
         // let endk = endk_for_quadratic(c, d);
@@ -783,11 +786,23 @@ pub fn solve_for_params_exact(
 }
 
 #[allow(unused_must_use)]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::utils::*;
+    use test_log::test;
 
     #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn conrtol_test_sym1() {
+        dbg!(HyperbezParams::from_control(
+            kurbo::Point::new(0.3, 0.15),
+            kurbo::Point::new(0.7, 0.15),
+        ));
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
     fn test1() {
         solve_helper(
             kurbo::Point::new(0.1, 0.4),
@@ -798,6 +813,7 @@ mod tests {
     }
 
     #[test]
+    #[test_log(default_log_filter = "trace")]
     fn test2() {
         solve_helper(
             kurbo::Point::new(0.1, 0.3),
@@ -807,6 +823,7 @@ mod tests {
     }
 
     #[test]
+    #[test_log(default_log_filter = "trace")]
     fn test3() {
         solve_helper(
             kurbo::Point::new(0., 0.3),
@@ -816,6 +833,7 @@ mod tests {
     }
 
     #[test]
+    #[test_log(default_log_filter = "trace")]
     fn test4() {
         solve_helper(
             kurbo::Point::new(0.3, 0.15),
@@ -825,6 +843,7 @@ mod tests {
     }
 
     #[test]
+    #[test_log(default_log_filter = "trace")]
     fn test5() {
         solve_helper(
             kurbo::Point::new(0.3, 0.15),
@@ -834,6 +853,7 @@ mod tests {
     }
 
     #[test]
+    #[test_log(default_log_filter = "trace")]
     fn listy() {
         use std::io::Write;
         let mut file = std::io::BufWriter::new(

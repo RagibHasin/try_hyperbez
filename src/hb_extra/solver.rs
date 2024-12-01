@@ -2,11 +2,14 @@ use std::f64;
 
 use nalgebra::{SVector, Vector2, Vector3, Vector5};
 use num_dual::{jacobian, DualNum, DualVec64};
-use xilem_web::svg::kurbo;
+use xilem_web::svg::kurbo::{self, ParamCurve, ParamCurveDeriv};
 
 use kurbo::{common::GAUSS_LEGENDRE_COEFFS_32, Affine};
 
-use crate::utils::*;
+use crate::{
+    hb_extra::{k_for_tension, quadratic_for_endk},
+    utils::*,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub struct HyperbezParams<D> {
@@ -233,7 +236,7 @@ fn solve_iterate_once(
 
 #[derive(Debug, Clone, Copy)]
 pub struct Solution<const N: usize> {
-    pub params: SVector<f64, N>,
+    pub params: Vector5<f64>,
     pub err: SVector<f64, N>,
     pub iter: usize,
 }
@@ -279,6 +282,7 @@ pub fn solve_for_params_exact(
     let mut err = Vector5::from_data(nalgebra::ArrayStorage([[f64::INFINITY; 5]]));
     for i in 0..n_iter {
         let (new_err, new_guess) = solve_iterate_once(p0_5, phi0_5, theta1, p1_angle, guess);
+        tracing::trace!(i, ?new_err, ?new_guess);
         let Some(new_guess) = new_guess else {
             return Err(SolveError::Singularity {
                 guess,
@@ -333,7 +337,7 @@ pub fn solve_for_ab_exact(
 ) -> SolveResult<2> {
     if radian_in_line(theta0) && radian_in_line(theta1) {
         return Ok(Solution {
-            params: Vector2::new(0., 0.),
+            params: Vector5::new(0., 0., guess[2], guess[3], guess[4]),
             err: Vector2::zeros(),
             iter: 0,
         });
@@ -355,7 +359,7 @@ pub fn solve_for_ab_exact(
         };
         if new_err.iter().all(|e| e.abs() < threshold) {
             return Ok(Solution {
-                params: new_guess,
+                params: Vector5::new(new_guess.x, new_guess.y, guess[2], guess[3], guess[4]),
                 err: new_err,
                 iter: i,
             });
@@ -386,9 +390,19 @@ fn solve_iterate_once_for_cdt(
                 ))
                 .data
                 .0;
-            let p0_5_x_o = p0_5_x_r * p1_angle_r.cos() - p0_5_y_r * p1_angle_r.sin() - p0_5.x;
-            let p0_5_y_o = p0_5_x_r * p1_angle_r.sin() + p0_5_y_r * p1_angle_r.cos() - p0_5.y;
-            let phi0_5_o = phi0_5_r + p1_angle_r - phi0_5;
+            let theta0_r = -p1_angle_r;
+            let p0_5_x_o = p0_5_x_r * theta0_r.cos() - p0_5_y_r * theta0_r.sin() - p0_5.x;
+            let p0_5_y_o = p0_5_x_r * theta0_r.sin() + p0_5_y_r * theta0_r.cos() - p0_5.y;
+            let phi0_5_o = norm_radians(phi0_5_r + theta0_r - phi0_5);
+            tracing::trace!(
+                ?p0_5_x_r,
+                ?p0_5_y_r,
+                ?phi0_5_r,
+                ?p1_angle_r,
+                ?p0_5_x_o,
+                ?p0_5_y_o,
+                ?phi0_5_o,
+            );
 
             Vector3::new(p0_5_x_o, p0_5_y_o, phi0_5_o)
         },
@@ -419,7 +433,7 @@ pub fn solve_for_cdt_exact(
         };
         if new_err.iter().all(|e| e.abs() < threshold) {
             return Ok(Solution {
-                params: new_guess,
+                params: Vector5::new(guess[0], guess[1], new_guess.x, new_guess.y, new_guess.z),
                 err: new_err,
                 iter: i,
             });
@@ -432,11 +446,98 @@ pub fn solve_for_cdt_exact(
     Err(SolveError::OutOfIteration { guess, err })
 }
 
+pub fn solve_inferring_full(cb: kurbo::CubicBez, threshold: f64, n_iter: usize) -> [f64; 5] {
+    let p0_5 = cb.eval(0.5);
+    let phi0_5 = cb.deriv().eval(0.5).to_vec2().atan2();
+    let c0 = cb.p1.to_vec2();
+    let c1 = cb.p3 - cb.p2;
+    let theta0 = c0.atan2();
+    let theta1 = c1.atan2();
+
+    let [guess_c, guess_d] = {
+        let th0 = -theta0;
+        let th1 = theta1;
+        let d0 = c0.hypot();
+        let d1 = c1.hypot();
+        let tens0 = d0 * 1.5 * (th0.cos() + 1.);
+        let tens1 = d1 * 1.5 * (th1.cos() + 1.);
+        let mut k0 = k_for_tension(tens0);
+        let mut k1 = k_for_tension(tens1);
+        let cbr = (k0 / k1).powf(1. / 3.);
+        // tracing::trace!(th0, th1, d0, d1, tens0, tens1, k0, k1, cbr);
+        fn soft(x: f64) -> f64 {
+            (0.5 * (1. + x * x)).sqrt()
+        }
+        k1 /= soft(cbr);
+        k0 /= soft(1. / cbr);
+        // tracing::trace!(k0, k1);
+
+        let dc = (cb.p2 - cb.p1).hypot();
+        let kmid = dc.powf(1.5);
+        let ratio = (d0 / d1).powf(1.5);
+        let blend = 0.5 + 0.5 * (3. - 10. * dc).tanh();
+        k0 += blend * (kmid / ratio - k0);
+        k1 += blend * (kmid * ratio - k1);
+        // tracing::trace!(dc, kmid, ratio, blend, k0, k1);
+        quadratic_for_endk(k0, k1)
+    };
+
+    let guess_b = make_guess_b(guess_c, guess_d, theta1, theta0);
+    let guess_t = (p0_5.x * theta1.abs() + 0.5 * theta0.abs()) / (theta1.abs() + theta0.abs());
+    let mut guess = [0., guess_b, guess_c, guess_d, guess_t];
+    tracing::trace!(?guess);
+
+    for i in 0..n_iter {
+        let cdt = solve_for_cdt_exact(p0_5, phi0_5, guess, 1e-2, 5);
+        tracing::trace!(?cdt);
+
+        if let Ok(Solution { params, .. }) = cdt {
+            guess = params.data.0[0];
+        };
+        guess[1] = make_guess_b(guess_c, guess_d, theta1, theta0);
+        tracing::trace!(?guess);
+
+        let s = solve_for_ab_exact(theta0, theta1, guess, threshold, n_iter / 2);
+        tracing::trace!(?s);
+
+        if let Ok(Solution { params, .. }) = s {
+            guess = params.data.0[0];
+        };
+        dbg!(guess);
+
+        let hb = crate::hb_extra::HyperbezParams::new(guess[0], guess[1], guess[2], guess[3], 1.);
+        let p1_r = hb.integrate(1.);
+        let p1_angle_r = p1_r.atan2();
+        let theta1_r = hb.theta(1.);
+        let p0_5_r = Affine::rotate(-p1_angle_r) * hb.integrate(guess[4]).to_point();
+        let phi0_5_r = hb.theta(guess[4]);
+
+        let err = [
+            p0_5_r.x - p0_5.x,
+            p0_5_r.y - p0_5.y,
+            phi0_5_r - p1_angle_r - phi0_5,
+            theta1_r - p1_angle_r - phi0_5,
+            -p1_angle_r - theta0,
+        ];
+
+        tracing::trace!(i, ?err);
+
+        if err.iter().all(|e| e.abs() < threshold) {
+            break;
+        }
+    }
+
+    guess
+}
+
 #[allow(unused_must_use)]
+#[cfg(test)]
 mod tests {
     use super::*;
+    use test_log::test;
 
     #[test]
+    #[test_log(default_log_filter = "trace")]
     fn test1() {
         solve_helper(
             kurbo::Point::new(0.1, 0.4),
@@ -448,6 +549,7 @@ mod tests {
     }
 
     #[test]
+    #[test_log(default_log_filter = "trace")]
     fn test1_1() {
         solve_helper(
             kurbo::Point::new(0.1, 0.4),
@@ -460,6 +562,7 @@ mod tests {
     }
 
     #[test]
+    #[test_log(default_log_filter = "trace")]
     fn test2() {
         solve_helper(
             kurbo::Point::new(0.1, 0.3),
@@ -469,6 +572,7 @@ mod tests {
     }
 
     #[test]
+    #[test_log(default_log_filter = "trace")]
     fn test3() {
         solve_helper(
             kurbo::Point::new(0., 0.3),
@@ -478,6 +582,7 @@ mod tests {
     }
 
     #[test]
+    #[test_log(default_log_filter = "trace")]
     fn test4() {
         solve_helper(
             kurbo::Point::new(0.3, 0.15),
@@ -487,6 +592,7 @@ mod tests {
     }
 
     #[test]
+    #[test_log(default_log_filter = "trace")]
     fn test5() {
         solve_helper(
             kurbo::Point::new(0.3, 0.15),
@@ -496,6 +602,7 @@ mod tests {
     }
 
     #[test]
+    #[test_log(default_log_filter = "trace")]
     fn test6() {
         solve_helper(
             kurbo::Point::new(0.3, 0.15),
@@ -505,6 +612,7 @@ mod tests {
     }
 
     #[test]
+    #[test_log(default_log_filter = "trace")]
     fn test7() {
         solve_helper(
             kurbo::Point::new(0.3, 0.15),
@@ -514,6 +622,7 @@ mod tests {
     }
 
     #[test]
+    #[test_log(default_log_filter = "trace")]
     fn test8() {
         solve_helper(
             kurbo::Point::new(0.3, 0.25),
@@ -523,6 +632,7 @@ mod tests {
     }
 
     #[test]
+    #[test_log(default_log_filter = "trace")]
     fn test9() {
         solve_helper(
             kurbo::Point::new(0.1, 0.4),
@@ -530,5 +640,56 @@ mod tests {
             solve_inferring(solve_for_params_exact),
         );
         // solve_for_cubic(cubicbez, [0., 0., 1., -1., 0.5]);
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test10() {
+        solve_helper(
+            kurbo::Point::new(0.65, 0.5),
+            kurbo::Point::new(0.35, 0.5),
+            solve_inferring(solve_for_params_exact),
+        );
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test11() {
+        solve_helper(
+            kurbo::Point::new(-0.5, 0.5),
+            kurbo::Point::new(1.5, 0.5),
+            solve_inferring(solve_for_params_exact),
+        );
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test12() {
+        solve_helper(
+            kurbo::Point::new(0.1, 0.4),
+            kurbo::Point::new(0.3, 0.4),
+            solve_inferring_full,
+        );
+        // solve_for_cubic(cubicbez, [0., 0., 1., -1., 0.5]);
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test13() {
+        solve_helper(
+            kurbo::Point::new(0.65, 0.5),
+            kurbo::Point::new(0.35, 0.5),
+            solve_inferring_full,
+        );
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test14() {
+        solve_helper(
+            kurbo::Point::new(-0.5, 0.5),
+            kurbo::Point::new(1.5, 0.5),
+            solve_inferring_full,
+        );
     }
 }
