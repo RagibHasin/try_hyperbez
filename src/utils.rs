@@ -21,6 +21,17 @@ pub fn solve_helper<R>(p1: Point, p2: Point, solve: impl Fn(CubicBez, f64, usize
     solve(cubicbez, 1e-2, 11)
 }
 
+pub fn solve_helper_ext<R>(
+    p1: Point,
+    p2: Point,
+    threshold: f64,
+    n_iter: usize,
+    solve: impl Fn(CubicBez, f64, usize) -> R,
+) -> R {
+    let cubicbez = CubicBez::new(Point::ZERO, p1, p2, Point::new(1., 0.));
+    solve(cubicbez, threshold, n_iter)
+}
+
 fn solve_for_cubic<R: std::fmt::Debug>(
     solve_exact: impl Fn(Point, f64, f64, f64, [f64; 5], f64, usize) -> R,
     cb: CubicBez,
@@ -140,18 +151,6 @@ pub fn make_guess_b(guess_c: f64, guess_d: f64, theta1: f64, theta0: f64) -> f64
     let guess_q1_sqrt = (guess_c + guess_d + 1.).sqrt();
     (theta1 - theta0) * (-4. * guess_c + guess_d.powi(2))
         / (2. * guess_d - (4. * guess_c + 2. * guess_d) / guess_q1_sqrt)
-}
-
-pub fn solve_passthru(
-    _p0_5: Point,
-    _phi0_5: f64,
-    _theta0: f64,
-    _theta1: f64,
-    guess: [f64; 5],
-    _threshold: f64,
-    _n_iter: usize,
-) -> [f64; 5] {
-    guess
 }
 
 #[allow(unused_must_use)]

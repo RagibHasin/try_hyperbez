@@ -65,9 +65,11 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let scale_down = kurbo::TranslateScale::scale(1. / base_width);
     let cubicbez = kurbo::CubicBez::new(p0, state.p1, state.p2, p3);
 
-    let raw_params = utils::solve_helper(
+    let raw_params = utils::solve_helper_ext(
         scale_down * state.p1,
         scale_down * state.p2,
+        1e-2,
+        1,
         hb_extra::solver::solve_inferring_full,
     );
     let params = hb_extra::HyperbezParams::new(

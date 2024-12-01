@@ -64,37 +64,52 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let scale_down = kurbo::TranslateScale::scale(1. / base_width);
     let cubicbez = kurbo::CubicBez::new(p0, state.p1, p2, p3);
 
-    let (params, raw_params, n_iter, err, err_type) = match utils::solve_helper(
-        scale_down * state.p1,
-        scale_down * p2,
-        utils::solve_inferring(hb_extra::solver::solve_for_params_exact),
-    ) {
-        Ok(s) => (
-            hb_extra::HyperbezParams::new(s.params.x, s.params.y, s.params.z, s.params.w, 1.),
-            s.params.data.0[0],
-            s.iter,
-            [s.err.x, s.err.y, s.err.z, s.err.w],
-            "None",
-        ),
-        Err(hb_extra::solver::SolveError::Singularity { guess, err, iter }) => (
-            hb_extra::HyperbezParams::new(0., -1., -1., 1., 1.),
-            guess.data.0[0],
-            iter,
-            [err.x, err.y, err.z, err.w],
-            "Singularity",
-        ),
-        Err(hb_extra::solver::SolveError::OutOfIteration { guess, err }) => (
-            hb_extra::HyperbezParams::new(0., -1., -1., 1., 1.),
-            guess.data.0[0],
-            11,
-            [err.x, err.y, err.z, err.w],
-            "OOI",
-        ),
-    };
+    // let (params, raw_params, n_iter, err, err_type) = match utils::solve_helper(
+    //     scale_down * state.p1,
+    //     scale_down * p2,
+    //     utils::solve_inferring(hb_extra::solver::solve_for_params_exact),
+    // ) {
+    //     Ok(s) => (
+    //         hb_extra::HyperbezParams::new(s.params.x, s.params.y, s.params.z, s.params.w, 1.),
+    //         s.params.data.0[0],
+    //         s.iter,
+    //         [s.err.x, s.err.y, s.err.z, s.err.w],
+    //         "None",
+    //     ),
+    //     Err(hb_extra::solver::SolveError::Singularity { guess, err, iter }) => (
+    //         hb_extra::HyperbezParams::new(0., -1., -1., 1., 1.),
+    //         guess.data.0[0],
+    //         iter,
+    //         [err.x, err.y, err.z, err.w],
+    //         "Singularity",
+    //     ),
+    //     Err(hb_extra::solver::SolveError::OutOfIteration { guess, err }) => (
+    //         hb_extra::HyperbezParams::new(0., -1., -1., 1., 1.),
+    //         guess.data.0[0],
+    //         11,
+    //         [err.x, err.y, err.z, err.w],
+    //         "OOI",
+    //     ),
+    // };
 
-    tracing::trace!(?raw_params, n_iter, ?err, err_type);
+    // tracing::trace!(?raw_params, n_iter, ?err, err_type);
 
     // let params = hb_extra::HyperbezParams::from_control(scale_down * state.p1, scale_down * p2);
+
+    let raw_params = utils::solve_helper_ext(
+        scale_down * state.p1,
+        scale_down * p2,
+        1e-2,
+        1,
+        hb_extra::solver::solve_inferring_full,
+    );
+    let params = hb_extra::HyperbezParams::new(
+        raw_params[0],
+        raw_params[1],
+        raw_params[2],
+        raw_params[3],
+        1.,
+    );
     let hyperbez = hb_extra::Hyperbezier::from_points_params(params, p0, p3);
 
     // {

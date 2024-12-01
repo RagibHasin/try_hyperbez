@@ -492,7 +492,7 @@ pub fn solve_inferring_full(cb: kurbo::CubicBez, threshold: f64, n_iter: usize) 
     let mut guess = [0., guess_b, guess_c, guess_d, guess_t];
     tracing::trace!(?guess);
 
-    let mut err = [f64::INFINITY; 5];
+    let mut err = f64::INFINITY;
     for i in 0..n_iter {
         let cdt = solve_for_cdt_exact(p0_5, phi0_5, guess, 1e-2, 5);
         tracing::trace!(?cdt);
@@ -518,20 +518,22 @@ pub fn solve_inferring_full(cb: kurbo::CubicBez, threshold: f64, n_iter: usize) 
         let p0_5_r = hb.integrate(guess[4]);
         let phi0_5_r = hb.theta(guess[4]);
 
-        let new_err = [
+        let new_err = ([
             p0_5_r.x - p0_5_i.x,
             p0_5_r.y - p0_5_i.y,
             phi0_5_r - phi0_5_i,
             theta1_r - theta1_i,
             p1_angle_r - p1_angle_i,
         ]
-        .map(f64::abs);
+        .into_iter()
+        .map(|e| e.powi(2))
+        .sum::<f64>()
+            / 5.)
+            .sqrt();
 
         tracing::trace!(i, ?err, ?new_err);
 
-        if new_err.iter().all(|e| *e < threshold)
-            || (0..5).any(|i| new_err[i] > err[i] + threshold.powi(2))
-        {
+        if new_err < threshold || new_err > err + threshold.powi(2) {
             break;
         }
 
