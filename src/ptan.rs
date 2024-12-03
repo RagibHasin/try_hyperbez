@@ -100,7 +100,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
         scale_down * state.p1,
         scale_down * p2,
         1e-2,
-        1,
+        11,
         hb_extra::solver::solve_inferring_full,
     );
     let params = hb_extra::HyperbezParams::new(

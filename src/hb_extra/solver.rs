@@ -494,22 +494,22 @@ pub fn solve_inferring_full(cb: kurbo::CubicBez, threshold: f64, n_iter: usize) 
 
     let mut err = f64::INFINITY;
     for i in 0..n_iter {
+        let ab = solve_for_ab_exact(theta0, theta1, guess, threshold, n_iter / 2);
+        tracing::trace!(?ab);
+
+        if let Ok(Solution { params, .. }) = ab {
+            guess = params.data.0[0];
+        };
+        tracing::trace!(?guess);
+
         let cdt = solve_for_cdt_exact(p0_5, phi0_5, guess, 1e-2, 5);
         tracing::trace!(?cdt);
 
         if let Ok(Solution { params, .. }) = cdt {
             guess = params.data.0[0];
         };
-        guess[1] = make_guess_b(guess[2], guess[3], theta1, theta0);
+        // guess[1] = make_guess_b(guess[2], guess[3], theta1, theta0);
         tracing::trace!(?guess);
-
-        let s = solve_for_ab_exact(theta0, theta1, guess, threshold, n_iter / 2);
-        tracing::trace!(?s);
-
-        if let Ok(Solution { params, .. }) = s {
-            guess = params.data.0[0];
-        };
-        dbg!(guess);
 
         let hb = crate::hb_extra::HyperbezParams::new(guess[0], guess[1], guess[2], guess[3], 1.);
         let p1_r = hb.integrate(1.);
@@ -711,7 +711,7 @@ mod tests {
     fn test15() {
         solve_helper(
             kurbo::Point::new(0.1, 0.4),
-            kurbo::Point::new(0.91, 0.4),
+            kurbo::Point::new(0.9, 0.4),
             solve_inferring_full,
         );
     }

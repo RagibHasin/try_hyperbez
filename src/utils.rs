@@ -129,9 +129,9 @@ pub fn solve_inferring<R: std::fmt::Debug>(
         );
         tracing::trace!(?s);
 
-        let a_b = 1.5625 + theta1 / (theta0 + theta1 * 0.34);
-        let b = (theta1 - theta0) * 5. / (2. * a_b + 4.);
-        let a = a_b * b;
+        // let a_b = 1.5625 + theta1 / (theta0 + theta1 * 0.34);
+        // let b = (theta1 - theta0) * 5. / (2. * a_b + 4.);
+        // let a = a_b * b;
         // let guess = [0., theta1 * 2.5, -1., 1.];
 
         let guess = if let Ok(solver::Solution { params, .. }) = s {
