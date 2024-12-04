@@ -81,16 +81,16 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
         scale_down * p2,
         1e-2,
         11,
-        hb_extra::solver::solve_inferring_full,
+        hb::solver::solve_inferring_full,
     );
-    let params = hb_extra::HyperbezParams::new(
+    let params = hb::HyperbezParams::new(
         raw_params[0],
         raw_params[1],
         raw_params[2],
         raw_params[3],
         1.,
     );
-    let hyperbez = hb_extra::Hyperbezier::from_points_params(params, p0, p3);
+    let hyperbez = hb::Hyperbezier::from_points_params(params, p0, p3);
 
     // {
     //     let arg_uv = hyperbez.params().integrate(1.).angle().to_degrees();

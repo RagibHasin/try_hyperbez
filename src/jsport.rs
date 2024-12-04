@@ -46,8 +46,8 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let cubicbez = kurbo::CubicBez::new(p0, state.p1, state.p2, p3);
 
     let params =
-        hb_extra::HyperbezParams::from_control(scale_down * state.p1, scale_down * state.p2);
-    let hyperbez = hb_extra::Hyperbezier::from_points_params(params, p0, p3);
+        hb::HyperbezParams::from_control(scale_down * state.p1, scale_down * state.p2);
+    let hyperbez = hb::Hyperbezier::from_points_params(params, p0, p3);
 
     // {
     //     let arg_uv = hyperbez.params().integrate(1.).angle().to_degrees();

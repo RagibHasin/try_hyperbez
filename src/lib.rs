@@ -1,2 +1,2 @@
-pub mod hb_extra;
+pub mod hb;
 pub mod utils;

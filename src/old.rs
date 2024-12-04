@@ -61,8 +61,8 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     // state.d = state.d.clamp(d_limit.start, d_limit.end);
 
     let base_width = 500.;
-    let hyperbez = hb_extra::Hyperbezier::from_points_params(
-        hb_extra::HyperbezParams::new(state.a, state.b, state.c, state.d, 1.),
+    let hyperbez = hb::Hyperbezier::from_points_params(
+        hb::HyperbezParams::new(state.a, state.b, state.c, state.d, 1.),
         Point::ZERO,
         Point::new(base_width, 0.),
     );

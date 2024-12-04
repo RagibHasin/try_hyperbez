@@ -2,7 +2,7 @@ use std::f64;
 
 use xilem_web::svg::kurbo::{CubicBez, ParamCurve, ParamCurveDeriv, Point};
 
-use crate::hb_extra::{k_for_tension, quadratic_for_endk, solver};
+use crate::hb::{k_for_tension, quadratic_for_endk, solver};
 
 pub fn norm_radians<D: num_dual::DualNum<f64> + Copy>(theta: D) -> D {
     let mut re = theta.re().rem_euclid(f64::consts::TAU);

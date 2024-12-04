@@ -7,7 +7,7 @@ use xilem_web::svg::kurbo::{self, ParamCurve, ParamCurveDeriv};
 use kurbo::{common::GAUSS_LEGENDRE_COEFFS_32, Affine};
 
 use crate::{
-    hb_extra::{k_for_tension, quadratic_for_endk},
+    hb::{k_for_tension, quadratic_for_endk},
     utils::*,
 };
 
@@ -511,7 +511,7 @@ pub fn solve_inferring_full(cb: kurbo::CubicBez, threshold: f64, n_iter: usize) 
         // guess[1] = make_guess_b(guess[2], guess[3], theta1, theta0);
         tracing::trace!(?guess);
 
-        let hb = crate::hb_extra::HyperbezParams::new(guess[0], guess[1], guess[2], guess[3], 1.);
+        let hb = crate::hb::HyperbezParams::new(guess[0], guess[1], guess[2], guess[3], 1.);
         let p1_r = hb.integrate(1.);
         let p1_angle_r = p1_r.atan2();
         let theta1_r = hb.theta(1.);
