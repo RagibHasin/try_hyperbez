@@ -1,191 +1,17 @@
 use std::f64;
 
-use nalgebra::{SVector, Vector2, Vector3, Vector5};
+use xilem_web::svg::kurbo;
+
+use kurbo::{Affine, ParamCurve, ParamCurveDeriv, Point};
+use nalgebra::{Vector2, Vector3, Vector5};
 use num_dual::{jacobian, DualNum, DualVec64};
-use xilem_web::svg::kurbo::{self, ParamCurve, ParamCurveDeriv};
 
-use kurbo::{common::GAUSS_LEGENDRE_COEFFS_32, Affine};
+use crate::utils::*;
 
-use crate::{
-    hb::{k_for_tension, quadratic_for_endk},
-    utils::*,
-};
-
-#[derive(Clone, Copy, Debug)]
-pub struct HyperbezParams<D> {
-    a: D,
-    b: D,
-    c: D,
-    d: D,
-    e: D,
-
-    num0: D,
-    num1: D,
-}
-
-impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
-    /// Create a new hyperbezier with the given parameters.
-    pub fn new(a: D, b: D, c: D, d: D, e: D) -> Self {
-        let denom = D::from(2.) / (c * 4. - d * d);
-        let beta0 = d * denom;
-        let num0 = a * (-d * beta0 * 0.5 - 1.) / c + b * beta0;
-        let num1 = (b * c * 2. - d * a) * denom;
-
-        HyperbezParams {
-            a,
-            b,
-            c,
-            d,
-            e,
-            num0,
-            num1,
-        }
-    }
-
-    fn int_helper(&self, t: D) -> D {
-        // assumes self.e = 1
-        let q = self.c * t * t + self.d * t + 1.;
-        (self.num0 + self.num1 * t) / q.sqrt()
-    }
-
-    /// Determine the angle for the given parameter.
-    ///
-    /// This can be interpreted as a Whewell representation of the
-    /// curve. The `t` parameter ranges from 0 to 1, and the returned
-    /// value is 0 for `t = 0`.
-    pub fn theta(&self, t: D) -> D {
-        self.int_helper(t) - self.num0
-    }
-
-    /// Returns [q, κ]
-    fn eval_q(&self, t: D) -> [D; 2] {
-        let q = self.c * t * t + self.d * t + self.e;
-        let k = (self.a * t + self.b) / (q * q.sqrt());
-        [q, k]
-    }
-
-    pub fn kappa(&self, t: D) -> D {
-        self.eval_q(t)[1]
-    }
-
-    pub fn q(&self, t: D) -> D {
-        self.eval_q(t)[0]
-    }
-
-    // fn report_endpoints(&self) -> [D; 2] {
-    //     let mut sum = D::from(0.);
-    //     for (wi, xi) in GAUSS_LEGENDRE_COEFFS_32 {
-    //         // for (let i = 0; i < co.length; i += 2) {
-    //         // let xi = co[i + 1];
-    //         // let wi = co[i];
-    //         let t = 0.5 + 0.5 * xi;
-    //         let q = self.q(D::from(t));
-    //         sum += q.powf(-1.5) * *wi;
-    //     }
-    //     let integral = sum * 0.5;
-    //     let q0 = self.q(D::from(0.));
-    //     let q1 = self.q(D::from(1.));
-    //     [q0.powf(-1.5) / integral, q1.powf(-1.5) / integral]
-    // }
-
-    /// Evaluate the position of the raw curve.
-    ///
-    /// This is simply the integral of the Whewell representation,
-    /// so that the total arc length is unit, and the initial tangent
-    /// is horizontal.
-    pub fn integrate(&self, t: D) -> Vector2<D> {
-        // TODO: improve accuracy by subdividing in near-cusp cases
-        let mut xy = Vector2::new(D::from(0.), D::from(0.));
-        let u0 = t * 0.5;
-        for (wi, xi) in GAUSS_LEGENDRE_COEFFS_32 {
-            let u = u0 + u0 * *xi;
-            let (y, x) = self.theta(u).sin_cos();
-            xy += Vector2::new(x, y) * D::from(*wi);
-        }
-        xy * u0
-    }
-
-    pub fn make(a: D, b: D, c0: D, c1: D) -> Self {
-        let c = -(c0 + c1) * (c0 + c1);
-        let d = c0 * (c0 + c1) * 2.;
-        let e = -c0 * c0 + 1.;
-        HyperbezParams::new(a, b, c, d, e)
-    }
-
-    // pub fn from_control(p1: Point, p2: Point) -> Self {
-    //     // let pts = this.cubic.pts;
-    //     // let chord = pts[3].minus(pts[0]).hypot();
-    //     let chord = 1.;
-    //     // let dx0 = pts[1].x - pts[0].x;
-    //     // let dy0 = pts[1].y - pts[0].y;
-    //     // let dx1 = pts[2].x - pts[3].x;
-    //     // let dy1 = pts[2].y - pts[3].y;
-    //     let dp0 = p1.to_vec2();
-    //     let dp1 = p2 - Point::new(1., 0.);
-    //     // let th0 = Math.atan2(-dy0, dx0);
-    //     // let th1 = Math.atan2(-dy1, -dx1);
-    //     let th0 = -(dp0.atan2());
-    //     let th1 = (-dp1).atan2();
-    //     let tens0 = dp0.hypot() / chord * 1.5 * (th0.cos() + 1.);
-    //     let tens1 = dp1.hypot() / chord * 1.5 * (th1.cos() + 1.);
-    //     let d0 = dp0.hypot() / chord;
-    //     let d1 = dp1.hypot() / chord;
-    //     let mut k0 = k_for_tension(tens0);
-    //     let mut k1 = k_for_tension(tens1);
-    //     let cbr = (k0 / k1).powf(1. / 3.);
-    //     fn soft(x: f64) -> f64 {
-    //         (0.5 * (1. + x * x)).sqrt()
-    //     }
-    //     k1 /= soft(cbr);
-    //     k0 /= soft(1. / cbr);
-
-    //     let dc = (p2 - p1).hypot() / chord;
-    //     let kmid = dc.powf(1.5);
-    //     let ratio = (d0 / d1).powf(1.5);
-    //     let blend = 0.5 + 0.5 * (3. - 10. * dc).tanh();
-    //     k0 += blend * (kmid / ratio - k0);
-    //     k1 += blend * (kmid * ratio - k1);
-    //     let [c, d] = quadratic_for_endk(k0, k1);
-    //     //console.log('dc', dc, 'c', cd.c, 'd', cd.d);
-    //     let endk = endk_for_quadratic(c, d);
-    //     // console.log(dc, k0, k1, blend);
-    //     let [a, b] = solve_thetas(th0, th1, c, d, 1.);
-    //     HyperbezParams::new(a, b, c, d, 1.)
-    // }
-
-    /// Returns [θ0, θ1]
-    pub fn calc_thetas(&self) -> [D; 2] {
-        let p = self.integrate(D::from(1.));
-        let th0 = p.y.atan2(p.x);
-        let th1 = self.theta(D::from(1.)) - th0;
-        [th0, th1]
-    }
-
-    pub fn a(&self) -> D {
-        self.a
-    }
-    pub fn b(&self) -> D {
-        self.b
-    }
-    pub fn c(&self) -> D {
-        self.c
-    }
-    pub fn d(&self) -> D {
-        self.d
-    }
-    pub fn e(&self) -> D {
-        self.e
-    }
-    pub fn num1(&self) -> D {
-        self.num1
-    }
-    pub fn num0(&self) -> D {
-        self.num0
-    }
-}
+use super::*;
 
 fn system_for_solving<D: DualNum<f64> + Copy>(
-    p0_5_i: kurbo::Point,
+    p0_5_i: Point,
     phi0_5_i: f64,
     theta1_i: f64,
     p1_angle_i: f64,
@@ -220,7 +46,7 @@ fn system_for_solving<D: DualNum<f64> + Copy>(
 
 #[must_use]
 fn solve_iterate_once(
-    p0_5: kurbo::Point,
+    p0_5: Point,
     phi0_5: f64,
     theta1: f64,
     p1_angle: f64,
@@ -234,30 +60,8 @@ fn solve_iterate_once(
     (f, new_guess)
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Solution<const N: usize> {
-    pub params: Vector5<f64>,
-    pub err: SVector<f64, N>,
-    pub iter: usize,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum SolveError<const N: usize> {
-    Singularity {
-        guess: Vector5<f64>,
-        err: SVector<f64, N>,
-        iter: usize,
-    },
-    OutOfIteration {
-        guess: Vector5<f64>,
-        err: SVector<f64, N>,
-    },
-}
-
-pub type SolveResult<const N: usize> = Result<Solution<N>, SolveError<N>>;
-
 pub fn solve_for_params_exact(
-    p0_5: kurbo::Point,
+    p0_5: Point,
     phi0_5: f64,
     theta0: f64,
     theta1: f64,
@@ -311,14 +115,13 @@ fn solve_iterate_once_for_ab(
 ) -> (Vector2<f64>, Option<Vector2<f64>>) {
     let (f, mut jac) = jacobian(
         |guess_i: Vector2<DualVec64<nalgebra::U2>>| {
-            let result =
-                system_for_solving(kurbo::Point::ZERO, 0., theta1, p1_angle)(Vector5::new(
-                    guess_i.x,
-                    guess_i.y,
-                    guess.z.into(),
-                    guess.w.into(),
-                    guess.a.into(),
-                ));
+            let result = system_for_solving(Point::ZERO, 0., theta1, p1_angle)(Vector5::new(
+                guess_i.x,
+                guess_i.y,
+                guess.z.into(),
+                guess.w.into(),
+                guess.a.into(),
+            ));
             Vector2::new(result.w, result.a)
         },
         guess.xy(),
@@ -373,7 +176,7 @@ pub fn solve_for_ab_exact(
 
 #[must_use]
 fn solve_iterate_once_for_cdt(
-    p0_5: kurbo::Point,
+    p0_5: Point,
     phi0_5: f64,
     guess: Vector5<f64>,
 ) -> (Vector3<f64>, Option<Vector3<f64>>) {
@@ -381,7 +184,7 @@ fn solve_iterate_once_for_cdt(
     let (f, mut jac) = jacobian(
         |guess_i: Vector3<DualVec64<nalgebra::U3>>| {
             let [[p0_5_x_r, p0_5_y_r, phi0_5_r, _, p1_angle_r]] =
-                system_for_solving(kurbo::Point::ZERO, 0., 0., 0.)(Vector5::new(
+                system_for_solving(Point::ZERO, 0., 0., 0.)(Vector5::new(
                     guess.x.into(),
                     guess.y.into(),
                     guess_i.x,
@@ -414,7 +217,7 @@ fn solve_iterate_once_for_cdt(
 }
 
 pub fn solve_for_cdt_exact(
-    p0_5: kurbo::Point,
+    p0_5: Point,
     phi0_5: f64,
     guess: [f64; 5],
     threshold: f64,
@@ -511,9 +314,9 @@ pub fn solve_inferring_full(cb: kurbo::CubicBez, threshold: f64, n_iter: usize) 
         // guess[1] = make_guess_b(guess[2], guess[3], theta1, theta0);
         tracing::trace!(?guess);
 
-        let hb = crate::hb::HyperbezParams::new(guess[0], guess[1], guess[2], guess[3], 1.);
+        let hb = HyperbezParams::new(guess[0], guess[1], guess[2], guess[3], 1.);
         let p1_r = hb.integrate(1.);
-        let p1_angle_r = p1_r.atan2();
+        let p1_angle_r = p1_r.y.atan2(p1_r.x);
         let theta1_r = hb.theta(1.);
         let p0_5_r = hb.integrate(guess[4]);
         let phi0_5_r = hb.theta(guess[4]);
@@ -553,8 +356,8 @@ mod tests {
     #[test_log(default_log_filter = "trace")]
     fn test1() {
         solve_helper(
-            kurbo::Point::new(0.1, 0.4),
-            kurbo::Point::new(0.3, 0.4),
+            Point::new(0.1, 0.4),
+            Point::new(0.3, 0.4),
             // solve_with_guess(solve_for_params_exact, [-1., -1., -1., 1.]),
             solve_with_guess(solve_for_params_exact, [3.4, -3., 1., -1.]),
         );
@@ -565,8 +368,8 @@ mod tests {
     #[test_log(default_log_filter = "trace")]
     fn test1_1() {
         solve_helper(
-            kurbo::Point::new(0.1, 0.4),
-            kurbo::Point::new(0.3, 0.4),
+            Point::new(0.1, 0.4),
+            Point::new(0.3, 0.4),
             // solve_with_guess(solve_for_params_exact, [-1., -1., -1., 1.]),
             // solve_with_guess(solve_for_params_exact, [5.3, -5., -1., 1.]),
             solve_with_guess(solve_for_params_exact, [2.8, -2.2, 2.2, -2.2]),
@@ -578,8 +381,8 @@ mod tests {
     #[test_log(default_log_filter = "trace")]
     fn test2() {
         solve_helper(
-            kurbo::Point::new(0.1, 0.3),
-            kurbo::Point::new(0.3, 0.3),
+            Point::new(0.1, 0.3),
+            Point::new(0.3, 0.3),
             solve_with_guess(solve_for_params_exact, [-1., -1., 1., 0.]),
         );
     }
@@ -588,8 +391,8 @@ mod tests {
     #[test_log(default_log_filter = "trace")]
     fn test3() {
         solve_helper(
-            kurbo::Point::new(0., 0.3),
-            kurbo::Point::new(1., 0.3),
+            Point::new(0., 0.3),
+            Point::new(1., 0.3),
             solve_with_guess(solve_for_params_exact, [-1., -1., 1., 0.]),
         );
     }
@@ -598,8 +401,8 @@ mod tests {
     #[test_log(default_log_filter = "trace")]
     fn test4() {
         solve_helper(
-            kurbo::Point::new(0.3, 0.15),
-            kurbo::Point::new(0.7, 0.15),
+            Point::new(0.3, 0.15),
+            Point::new(0.7, 0.15),
             solve_with_guess(solve_for_params_exact, [0., -1., -1., 1.]),
         );
     }
@@ -608,8 +411,8 @@ mod tests {
     #[test_log(default_log_filter = "trace")]
     fn test5() {
         solve_helper(
-            kurbo::Point::new(0.3, 0.15),
-            kurbo::Point::new(0.7, 0.15),
+            Point::new(0.3, 0.15),
+            Point::new(0.7, 0.15),
             solve_with_guess(solve_for_params_exact, [-1., -1., 1., 0.]),
         );
     }
@@ -618,8 +421,8 @@ mod tests {
     #[test_log(default_log_filter = "trace")]
     fn test6() {
         solve_helper(
-            kurbo::Point::new(0.3, 0.15),
-            kurbo::Point::new(0.7, 0.15),
+            Point::new(0.3, 0.15),
+            Point::new(0.7, 0.15),
             solve_with_guess(solve_for_params_exact, [0., -0.7, 1., -1.]),
         );
     }
@@ -628,8 +431,8 @@ mod tests {
     #[test_log(default_log_filter = "trace")]
     fn test7() {
         solve_helper(
-            kurbo::Point::new(0.3, 0.15),
-            kurbo::Point::new(0.7, 0.15),
+            Point::new(0.3, 0.15),
+            Point::new(0.7, 0.15),
             solve_inferring(solve_for_params_exact),
         );
     }
@@ -638,8 +441,8 @@ mod tests {
     #[test_log(default_log_filter = "trace")]
     fn test8() {
         solve_helper(
-            kurbo::Point::new(0.3, 0.25),
-            kurbo::Point::new(0.7, 0.25),
+            Point::new(0.3, 0.25),
+            Point::new(0.7, 0.25),
             solve_inferring(solve_for_params_exact),
         );
     }
@@ -648,8 +451,8 @@ mod tests {
     #[test_log(default_log_filter = "trace")]
     fn test9() {
         solve_helper(
-            kurbo::Point::new(0.1, 0.4),
-            kurbo::Point::new(0.3, 0.4),
+            Point::new(0.1, 0.4),
+            Point::new(0.3, 0.4),
             solve_inferring(solve_for_params_exact),
         );
         // solve_for_cubic(cubicbez, [0., 0., 1., -1., 0.5]);
@@ -659,8 +462,8 @@ mod tests {
     #[test_log(default_log_filter = "trace")]
     fn test10() {
         solve_helper(
-            kurbo::Point::new(0.65, 0.5),
-            kurbo::Point::new(0.35, 0.5),
+            Point::new(0.65, 0.5),
+            Point::new(0.35, 0.5),
             solve_inferring(solve_for_params_exact),
         );
     }
@@ -669,8 +472,8 @@ mod tests {
     #[test_log(default_log_filter = "trace")]
     fn test11() {
         solve_helper(
-            kurbo::Point::new(-0.5, 0.5),
-            kurbo::Point::new(1.5, 0.5),
+            Point::new(-0.5, 0.5),
+            Point::new(1.5, 0.5),
             solve_inferring(solve_for_params_exact),
         );
     }
@@ -679,8 +482,8 @@ mod tests {
     #[test_log(default_log_filter = "trace")]
     fn test12() {
         solve_helper(
-            kurbo::Point::new(0.1, 0.4),
-            kurbo::Point::new(0.3, 0.4),
+            Point::new(0.1, 0.4),
+            Point::new(0.3, 0.4),
             solve_inferring_full,
         );
         // solve_for_cubic(cubicbez, [0., 0., 1., -1., 0.5]);
@@ -690,8 +493,8 @@ mod tests {
     #[test_log(default_log_filter = "trace")]
     fn test13() {
         solve_helper(
-            kurbo::Point::new(0.65, 0.5),
-            kurbo::Point::new(0.35, 0.5),
+            Point::new(0.65, 0.5),
+            Point::new(0.35, 0.5),
             solve_inferring_full,
         );
     }
@@ -700,8 +503,8 @@ mod tests {
     #[test_log(default_log_filter = "trace")]
     fn test14() {
         solve_helper(
-            kurbo::Point::new(-0.5, 0.5),
-            kurbo::Point::new(1.5, 0.5),
+            Point::new(-0.5, 0.5),
+            Point::new(1.5, 0.5),
             solve_inferring_full,
         );
     }
@@ -710,8 +513,8 @@ mod tests {
     #[test_log(default_log_filter = "trace")]
     fn test15() {
         solve_helper(
-            kurbo::Point::new(0.1, 0.4),
-            kurbo::Point::new(0.9, 0.4),
+            Point::new(0.1, 0.4),
+            Point::new(0.9, 0.4),
             solve_inferring_full,
         );
     }
