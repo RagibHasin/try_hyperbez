@@ -6,7 +6,7 @@ use xilem_web::{
         svg::g,
     },
     interfaces::*,
-    svg::kurbo::{self, Affine, Circle, Line, ParamCurve, Point, Size, Vec2},
+    svg::kurbo::{self, Affine, Circle, Line, ParamCurve, Point, Vec2},
     DomView,
 };
 
@@ -23,8 +23,7 @@ pub(crate) struct AppState {
     optimize: bool,
     accuracy_order: f64,
 
-    hovered_s: Option<f64>,
-
+    plots: plots::State,
     sheet: sheet::State,
 }
 
@@ -37,7 +36,7 @@ impl Default for AppState {
             d: 1.,
             optimize: false,
             accuracy_order: 1.,
-            hovered_s: None,
+            plots: Default::default(),
             sheet: Default::default(),
         }
     }
@@ -107,7 +106,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let mut hovered_theta = None;
     let mut hovered_kappa = None;
     let mut hover_mark = None;
-    if let Some(s) = state.hovered_s {
+    if let Some(s) = state.plots.hovered_x() {
         let i = (s * 1e3) as usize;
         (hovered_theta, hovered_kappa) = (Some(theta[i]), Some(kappa[i]));
         let (theta, kappa) = (theta[i].to_radians(), kappa[i]);
@@ -144,7 +143,8 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
         "s: ",
         (),
         state
-            .hovered_s
+            .plots
+            .hovered_x()
             .map_or(empty.clone(), |s| format!("{:.3}", s)),
     );
     let frag_hovered_theta = labeled_valued(
@@ -174,14 +174,10 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
         div((frag_hovered_s, frag_hovered_theta, frag_hovered_kappa)).class("results"),
     );
 
-    let plot_size = Size::new(760., 270.);
-    let frag_plots = div((
-        plot(&theta, plot_size, state.hovered_s, "θ (°)")
-            .map_state(|state: &mut AppState| &mut state.hovered_s),
-        plot(&kappa, plot_size, state.hovered_s, "κ")
-            .map_state(|state: &mut AppState| &mut state.hovered_s),
-    ))
-    .id("plots");
+    let frag_plots = state
+        .plots
+        .view(&theta, &kappa)
+        .map_state(|state: &mut AppState| &mut state.plots);
 
     let frag_svg = state
         .sheet

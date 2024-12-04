@@ -1,7 +1,7 @@
 use xilem_web::{
     elements::{html::div, svg::g},
     interfaces::*,
-    svg::kurbo::{self, Affine, Circle, Line, ParamCurve, Point, Shape, Size, Vec2},
+    svg::kurbo::{self, Affine, Circle, Line, ParamCurve, Point, Shape, Vec2},
     Action, DomView,
 };
 
@@ -13,9 +13,7 @@ use crate::components::*;
 pub(crate) struct AppState {
     p1: Point,
 
-    plots_size: Size,
-    hovered_s: Option<f64>,
-
+    plots: plots::State,
     sheet: sheet::State<Handle>,
 }
 
@@ -23,8 +21,7 @@ impl Default for AppState {
     fn default() -> Self {
         Self {
             p1: Point::new(50., 200.),
-            plots_size: Size::new(760., 540.),
-            hovered_s: None,
+            plots: Default::default(),
             sheet: Default::default(),
         }
     }
@@ -154,7 +151,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let mut hovered_theta = None;
     let mut hovered_kappa = None;
     let mut hover_mark = None;
-    if let Some(s) = state.hovered_s {
+    if let Some(s) = state.plots.hovered_x() {
         let i = (s * 1e3) as usize;
         (hovered_theta, hovered_kappa) = (Some(theta[i]), Some(kappa[i]));
         let (theta, kappa) = (theta[i].to_radians(), kappa[i]);
@@ -197,7 +194,8 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
         "s: ",
         (),
         state
-            .hovered_s
+            .plots
+            .hovered_x()
             .map_or(empty.clone(), |s| format!("{:.3}", s)),
     );
     let frag_hovered_theta = labeled_valued(
@@ -228,19 +226,10 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
         div((frag_hovered_s, frag_hovered_theta, frag_hovered_kappa)).class("results"),
     );
 
-    let mut plot_size = 1.5 * state.plots_size;
-    plot_size.height /= 2.;
-    let frag_plots = div((
-        plot(&theta, plot_size, state.hovered_s, "θ (°)")
-            .map_state(|state: &mut AppState| &mut state.hovered_s),
-        plot(&kappa, plot_size, state.hovered_s, "κ")
-            .map_state(|state: &mut AppState| &mut state.hovered_s),
-    ))
-    .on_resize(|state: &mut AppState, e| {
-        state.plots_size.width = e.content_rect().width();
-        state.plots_size.height = e.content_rect().height();
-    })
-    .id("plots");
+    let frag_plots = state
+        .plots
+        .view(&theta, &kappa)
+        .map_state(|state: &mut AppState| &mut state.plots);
 
     let frag_svg = state
         .sheet
