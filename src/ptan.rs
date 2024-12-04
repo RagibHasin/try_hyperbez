@@ -1,59 +1,42 @@
-use web_sys::wasm_bindgen::JsCast;
 use xilem_web::{
-    elements::{
-        html::div,
-        svg::{g, svg},
-    },
+    elements::{html::div, svg::g},
     interfaces::*,
     svg::kurbo::{self, Affine, Circle, Line, ParamCurve, Point, Shape, Size, Vec2},
-    DomView,
+    Action, DomView,
 };
 
 use hyperbez_toy::*;
 
-use crate::*;
-
-use components::*;
+use crate::components::*;
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct AppState {
     p1: Point,
 
-    sheet_origin: Point,
-    sheet_zoom: f64,
+    plots_size: Size,
     hovered_s: Option<f64>,
-    drag: DragElement,
-}
 
-impl AppState {
-    fn sheet_scale(&self, e: &web_sys::MouseEvent) -> f64 {
-        let sheet = e
-            .current_target()
-            .unwrap()
-            .unchecked_into::<web_sys::Element>();
-        self.sheet_zoom * 1200. / sheet.client_width() as f64
-    }
+    sheet: sheet::State<Handle>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
             p1: Point::new(50., 200.),
-            sheet_origin: Point::new(-350., -450.),
-            sheet_zoom: 1.,
+            plots_size: Size::new(760., 540.),
             hovered_s: None,
-            drag: DragElement::None,
+            sheet: Default::default(),
         }
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-enum DragElement {
-    None,
-    Sheet,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Handle {
     P0,
     P1,
 }
+
+impl Action for Handle {}
 
 pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let base_width = 500.;
@@ -153,8 +136,8 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let control0 = Affine::FLIP_Y * state.p1;
     let control0 = (
         Line::new((0., 0.), control0),
-        Circle::new(control0, NODE_RADIUS).on_mousedown(|state: &mut AppState, e| {
-            state.drag = DragElement::P0;
+        Circle::new(control0, NODE_RADIUS).on_mousedown(|state: &mut sheet::State<Handle>, e| {
+            state.set_drag(Some(Handle::P0));
             e.stop_propagation();
         }),
     );
@@ -162,8 +145,8 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let control1 = Affine::FLIP_Y * p2;
     let control1 = (
         Line::new((base_width, 0.), control1),
-        Circle::new(control1, NODE_RADIUS).on_mousedown(|state: &mut AppState, e| {
-            state.drag = DragElement::P1;
+        Circle::new(control1, NODE_RADIUS).on_mousedown(|state: &mut sheet::State<Handle>, e| {
+            state.set_drag(Some(Handle::P1));
             e.stop_propagation();
         }),
     );
@@ -245,72 +228,44 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
         div((frag_hovered_s, frag_hovered_theta, frag_hovered_kappa)).class("results"),
     );
 
-    let plot_size = Size::new(760., 270.);
+    let mut plot_size = 1.5 * state.plots_size;
+    plot_size.height /= 2.;
     let frag_plots = div((
         plot(&theta, plot_size, state.hovered_s, "θ (°)")
             .map_state(|state: &mut AppState| &mut state.hovered_s),
         plot(&kappa, plot_size, state.hovered_s, "κ")
             .map_state(|state: &mut AppState| &mut state.hovered_s),
     ))
+    .on_resize(|state: &mut AppState, e| {
+        state.plots_size.width = e.content_rect().width();
+        state.plots_size.height = e.content_rect().height();
+    })
     .id("plots");
 
-    let sheet_size = state.sheet_zoom * Size::new(1200., 900.);
-    let frag_svg = svg((
-        g((control0, control1)).class("control"),
-        cubicbez.id("cubicbez"),
-        path.id("hyperbez"),
-        hover_mark,
-        g(points).id("nodes"),
-    ))
-    .attr(
-        "viewBox",
-        format!(
-            "{} {} {} {}",
-            state.sheet_origin.x, state.sheet_origin.y, sheet_size.width, sheet_size.height,
-        ),
-    )
-    .on_mousedown(|state: &mut AppState, _| state.drag = DragElement::Sheet)
-    .on_mouseup(|state: &mut AppState, _| state.drag = DragElement::None)
-    .on_mousemove(move |state: &mut AppState, e| {
-        if let DragElement::None = state.drag {
-            return;
-        };
+    let frag_svg = state
+        .sheet
+        .view((
+            g((control0, control1)).class("control"),
+            cubicbez.id("cubicbez"),
+            path.id("hyperbez"),
+            hover_mark,
+            g(points).id("nodes"),
+        ))
+        .adapt(move |state: &mut AppState, thunk| {
+            thunk
+                .call(&mut state.sheet)
+                .map(|sheet::DragAction { data, event }| {
+                    let p = Affine::FLIP_Y
+                        * Affine::scale(state.sheet.zoom())
+                            .then_translate(state.sheet.origin().to_vec2())
+                        * Point::new(event.offset_x() as f64, event.offset_y() as f64);
 
-        let scale = state.sheet_scale(&e);
-        let p = Affine::FLIP_Y
-            * Affine::scale(scale).then_translate(state.sheet_origin.to_vec2())
-            * Point::new(e.offset_x() as f64, e.offset_y() as f64);
-
-        match state.drag {
-            DragElement::P0 => state.p1 = p,
-            DragElement::P1 => state.p1 = Point::new(base_width - p.x, p.y),
-            DragElement::Sheet => {
-                let delta = scale * Vec2::new(e.movement_x() as f64, e.movement_y() as f64);
-                tracing::trace!(?delta);
-                state.sheet_origin -= delta
-            }
-            DragElement::None => unreachable!(),
-        }
-    })
-    .on_wheel(|state: &mut AppState, e| {
-        e.prevent_default();
-
-        let factor = if e.delta_y() > 0. {
-            1.25
-        } else if e.delta_y() < 0. {
-            0.8
-        } else {
-            1.
-        };
-
-        let origin_delta = (factor - 1.)
-            * state.sheet_scale(&e)
-            * Vec2::new(e.offset_x() as f64, e.offset_y() as f64);
-        tracing::trace!(factor, ?origin_delta);
-        state.sheet_origin -= origin_delta;
-        state.sheet_zoom *= factor;
-    })
-    .passive(false);
+                    match data {
+                        Handle::P0 => state.p1 = p,
+                        Handle::P1 => state.p1 = Point::new(base_width - p.x, p.y),
+                    }
+                })
+        });
 
     div((
         div((div(frag_results).id("ui"), frag_plots)).id("pane-left"),

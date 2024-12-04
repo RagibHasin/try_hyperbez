@@ -1,10 +1,9 @@
 use std::ops::Range;
 
-use web_sys::wasm_bindgen::JsCast;
 use xilem_web::{
     elements::{
         html::{button, div},
-        svg::{g, svg},
+        svg::g,
     },
     interfaces::*,
     svg::kurbo::{self, Affine, Circle, Line, ParamCurve, Point, Size, Vec2},
@@ -13,9 +12,7 @@ use xilem_web::{
 
 use hyperbez_toy::*;
 
-use crate::*;
-
-use components::*;
+use crate::components::*;
 
 pub(crate) struct AppState {
     a: f64,
@@ -26,20 +23,9 @@ pub(crate) struct AppState {
     optimize: bool,
     accuracy_order: f64,
 
-    sheet_origin: Point,
-    sheet_zoom: f64,
     hovered_s: Option<f64>,
-    drag: DragElement,
-}
 
-impl AppState {
-    fn sheet_scale(&self, e: &web_sys::MouseEvent) -> f64 {
-        let sheet = e
-            .current_target()
-            .unwrap()
-            .unchecked_into::<web_sys::Element>();
-        self.sheet_zoom * 1200. / sheet.client_width() as f64
-    }
+    sheet: sheet::State,
 }
 
 impl Default for AppState {
@@ -51,18 +37,10 @@ impl Default for AppState {
             d: 1.,
             optimize: false,
             accuracy_order: 1.,
-            sheet_origin: Point::new(-350., -450.),
-            sheet_zoom: 1.,
             hovered_s: None,
-            drag: DragElement::None,
+            sheet: Default::default(),
         }
     }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum DragElement {
-    None,
-    Sheet,
 }
 
 pub fn d_limit(a: f64, b: f64, c: f64) -> Range<f64> {
@@ -205,56 +183,10 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     ))
     .id("plots");
 
-    let sheet_size = state.sheet_zoom * Size::new(1200., 900.);
-    let frag_svg = svg((path.id("hyperbez"), hover_mark, g(points).id("nodes")))
-        .attr(
-            "viewBox",
-            format!(
-                "{} {} {} {}",
-                state.sheet_origin.x, state.sheet_origin.y, sheet_size.width, sheet_size.height,
-            ),
-        )
-        .on_mousedown(|state: &mut AppState, _| state.drag = DragElement::Sheet)
-        .on_mouseup(|state: &mut AppState, _| state.drag = DragElement::None)
-        .on_mousemove(move |state: &mut AppState, e| {
-            if let DragElement::None = state.drag {
-                return;
-            };
-
-            let scale = state.sheet_scale(&e);
-            let p = Affine::FLIP_Y
-                * Affine::scale(scale).then_translate(state.sheet_origin.to_vec2())
-                * Point::new(e.offset_x() as f64, e.offset_y() as f64);
-            tracing::trace!(?p);
-
-            match state.drag {
-                DragElement::Sheet => {
-                    let delta = scale * Vec2::new(e.movement_x() as f64, e.movement_y() as f64);
-                    tracing::trace!(?delta);
-                    state.sheet_origin -= delta
-                }
-                DragElement::None => unreachable!(),
-            }
-        })
-        .on_wheel(|state: &mut AppState, e| {
-            e.prevent_default();
-
-            let factor = if e.delta_y() > 0. {
-                1.25
-            } else if e.delta_y() < 0. {
-                0.8
-            } else {
-                1.
-            };
-
-            let origin_delta = (factor - 1.)
-                * state.sheet_scale(&e)
-                * Vec2::new(e.offset_x() as f64, e.offset_y() as f64);
-            tracing::trace!(factor, ?origin_delta);
-            state.sheet_origin -= origin_delta;
-            state.sheet_zoom *= factor;
-        })
-        .passive(false);
+    let frag_svg = state
+        .sheet
+        .view((path.id("hyperbez"), hover_mark, g(points).id("nodes")))
+        .adapt(move |state: &mut AppState, thunk| thunk.call(&mut state.sheet).map(|_| {}));
 
     let frag_a = labeled_valued(
         "a: ",
