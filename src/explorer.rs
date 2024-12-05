@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use xilem_web::{
     elements::{
-        html::{button, div},
+        html::{self, button, div},
         svg::g,
     },
     interfaces::*,
@@ -26,6 +26,8 @@ pub(crate) struct AppState {
     plots: plots::State,
     sheet: sheet::State,
 }
+
+const BASE_WIDTH: f64 = 500.;
 
 impl Default for AppState {
     fn default() -> Self {
@@ -60,11 +62,10 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let d_limit = d_limit_rounded(state.a, state.b, state.c);
     // state.d = state.d.clamp(d_limit.start, d_limit.end);
 
-    let base_width = 500.;
     let hyperbez = hb::Hyperbezier::from_points_params(
         hb::HyperbezParams::new(state.a, state.b, state.c, state.d, 1.),
         Point::ZERO,
-        Point::new(base_width, 0.),
+        Point::new(BASE_WIDTH, 0.),
     );
 
     // {
@@ -80,7 +81,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
         } else {
             kurbo::fit_to_bezpath(&hyperbez, accuracy)
         };
-    let arclen = hyperbez.scale_rot().length() / base_width;
+    let arclen = hyperbez.scale_rot().length() / BASE_WIDTH;
     let (theta, kappa): (Vec<_>, Vec<_>) = (0..=1000)
         .map(|i| i as f64 * 1e-3)
         .map(|t| {
@@ -103,17 +104,19 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
         .map(|p| Circle::new(p, NODE_RADIUS))
         .collect::<Vec<_>>();
 
+    let mut hovered_point = None;
     let mut hovered_theta = None;
     let mut hovered_kappa = None;
     let mut hover_mark = None;
     if let Some(s) = state.plots.hovered_x() {
+        hovered_point = Some(hyperbez.eval(s));
         let i = (s * 1e3) as usize;
         (hovered_theta, hovered_kappa) = (Some(theta[i]), Some(kappa[i]));
         let (theta, kappa) = (theta[i].to_radians(), kappa[i]);
 
         let p = hyperbez.eval(s);
         let r_curv = hyperbez.scale_rot().length() / kappa;
-        let tangent_half = 0.25 * base_width * Vec2::from_angle(theta);
+        let tangent_half = 0.25 * BASE_WIDTH * Vec2::from_angle(theta);
         let tangent = Affine::FLIP_Y * Line::new(p - tangent_half, p + tangent_half);
         let r_curv = Affine::FLIP_Y
             * Line::new(
@@ -147,6 +150,16 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
             .hovered_x()
             .map_or(empty.clone(), |s| format!("{:.3}", s)),
     );
+    let frag_hovered_p_x = labeled_valued(
+        ("P", html::sub("x"), "(s): "),
+        (),
+        hovered_point.map_or(empty.clone(), |v| format!("{:.2}", v.x)),
+    );
+    let frag_hovered_p_y = labeled_valued(
+        ("P", html::sub("x"), "(s): "),
+        (),
+        hovered_point.map_or(empty.clone(), |v| format!("{:.2}", v.y)),
+    );
     let frag_hovered_theta = labeled_valued(
         "θ(s): ",
         (),
@@ -171,7 +184,14 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
             frag_n_points,
         ))
         .class("results"),
-        div((frag_hovered_s, frag_hovered_theta, frag_hovered_kappa)).class("results"),
+        div((
+            frag_hovered_s,
+            frag_hovered_p_x,
+            frag_hovered_p_y,
+            frag_hovered_theta,
+            frag_hovered_kappa,
+        ))
+        .class("results"),
     );
 
     let frag_plots = state
@@ -235,25 +255,19 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
         state.accuracy_order,
     );
 
+    let frag_options = div((
+        frag_a,
+        frag_b,
+        frag_c,
+        frag_d,
+        spacer(),
+        frag_optimize,
+        frag_accuracy,
+    ))
+    .id("options");
+
     div((
-        div((
-            div((
-                div((
-                    frag_a,
-                    frag_b,
-                    frag_c,
-                    frag_d,
-                    spacer(),
-                    frag_optimize,
-                    frag_accuracy,
-                ))
-                .id("options"),
-                frag_results,
-            ))
-            .id("ui"),
-            frag_plots,
-        ))
-        .id("pane-left"),
+        div((div((frag_options, frag_results)).id("ui"), frag_plots)).id("pane-left"),
         div(frag_svg).id("render-sheet"),
     ))
     .id("app-root")

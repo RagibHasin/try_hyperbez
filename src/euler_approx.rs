@@ -1,8 +1,11 @@
 use xilem_web::{
-    elements::{html::div, svg::g},
+    elements::{
+        html::{self, div},
+        svg::g,
+    },
     interfaces::*,
     svg::kurbo::{self, Affine, Circle, Line, ParamCurve, Point, Shape, Vec2},
-    Action, DomView,
+    DomView,
 };
 
 use hyperbez_toy::*;
@@ -18,6 +21,8 @@ pub(crate) struct AppState {
     sheet: sheet::State<Handle>,
 }
 
+const BASE_WIDTH: f64 = 500.;
+
 impl Default for AppState {
     fn default() -> Self {
         Self {
@@ -31,22 +36,17 @@ impl Default for AppState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Handle {
-    P0,
     P1,
+    P2,
 }
 
-impl Action for Handle {}
-
 pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
-    let base_width = 500.;
-
     let p0 = Point::ZERO;
-    let p3 = Point::new(base_width, 0.);
-    let scale_down = kurbo::TranslateScale::scale(1. / base_width);
+    let p3 = Point::new(BASE_WIDTH, 0.);
+    let scale_down = kurbo::TranslateScale::scale(1. / BASE_WIDTH);
     let cubicbez = kurbo::CubicBez::new(p0, state.p1, state.p2, p3);
 
-    let params =
-        hb::HyperbezParams::from_control(scale_down * state.p1, scale_down * state.p2);
+    let params = hb::HyperbezParams::from_control(scale_down * state.p1, scale_down * state.p2);
     let hyperbez = hb::Hyperbezier::from_points_params(params, p0, p3);
 
     // {
@@ -64,7 +64,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
         } else {
             kurbo::fit_to_bezpath(&hyperbez, accuracy)
         };
-    let arclen = hyperbez.scale_rot().length() / base_width;
+    let arclen = hyperbez.scale_rot().length() / BASE_WIDTH;
     let (theta, kappa): (Vec<_>, Vec<_>) = (0..=1000)
         .map(|i| i as f64 * 1e-3)
         .map(|t| {
@@ -91,31 +91,33 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let control0 = (
         Line::new((0., 0.), control0),
         Circle::new(control0, NODE_RADIUS).on_mousedown(|state: &mut sheet::State<Handle>, e| {
-            state.set_drag(Some(Handle::P0));
+            state.set_drag(Some(Handle::P1));
             e.stop_propagation();
         }),
     );
 
     let control1 = Affine::FLIP_Y * state.p2;
     let control1 = (
-        Line::new((base_width, 0.), control1),
+        Line::new((BASE_WIDTH, 0.), control1),
         Circle::new(control1, NODE_RADIUS).on_mousedown(|state: &mut sheet::State<Handle>, e| {
-            state.set_drag(Some(Handle::P1));
+            state.set_drag(Some(Handle::P2));
             e.stop_propagation();
         }),
     );
 
+    let mut hovered_point = None;
     let mut hovered_theta = None;
     let mut hovered_kappa = None;
     let mut hover_mark = None;
     if let Some(s) = state.plots.hovered_x() {
+        hovered_point = Some(hyperbez.eval(s));
         let i = (s * 1e3) as usize;
         (hovered_theta, hovered_kappa) = (Some(theta[i]), Some(kappa[i]));
         let (theta, kappa) = (theta[i].to_radians(), kappa[i]);
 
         let p = hyperbez.eval(s);
         let r_curv = hyperbez.scale_rot().length() / kappa;
-        let tangent_half = 0.25 * base_width * Vec2::from_angle(theta);
+        let tangent_half = 0.25 * BASE_WIDTH * Vec2::from_angle(theta);
         let tangent = Affine::FLIP_Y * Line::new(p - tangent_half, p + tangent_half);
         let r_curv = Affine::FLIP_Y
             * Line::new(
@@ -155,6 +157,16 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
             .hovered_x()
             .map_or(empty.clone(), |s| format!("{:.3}", s)),
     );
+    let frag_hovered_p_x = labeled_valued(
+        ("P", html::sub("x"), "(s): "),
+        (),
+        hovered_point.map_or(empty.clone(), |v| format!("{:.2}", v.x)),
+    );
+    let frag_hovered_p_y = labeled_valued(
+        ("P", html::sub("x"), "(s): "),
+        (),
+        hovered_point.map_or(empty.clone(), |v| format!("{:.2}", v.y)),
+    );
     let frag_hovered_theta = labeled_valued(
         "θ(s): ",
         (),
@@ -180,7 +192,14 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
             frag_n_points,
         ))
         .class("results"),
-        div((frag_hovered_s, frag_hovered_theta, frag_hovered_kappa)).class("results"),
+        div((
+            frag_hovered_s,
+            frag_hovered_p_x,
+            frag_hovered_p_y,
+            frag_hovered_theta,
+            frag_hovered_kappa,
+        ))
+        .class("results"),
     );
 
     let frag_plots = state
@@ -207,14 +226,37 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
                         * Point::new(event.offset_x() as f64, event.offset_y() as f64);
 
                     *match data {
-                        Handle::P0 => &mut state.p1,
-                        Handle::P1 => &mut state.p2,
+                        Handle::P1 => &mut state.p1,
+                        Handle::P2 => &mut state.p2,
                     } = p;
                 })
         });
 
+    let frag_p1_x = labeled_valued(
+        ("P1", html::sub("x"), ": "),
+        div(()),
+        textbox(state.p1.x).map_state(move |state: &mut AppState| &mut state.p1.x),
+    );
+    let frag_p1_y = labeled_valued(
+        ("P1", html::sub("y"), ": "),
+        div(()),
+        textbox(state.p1.y).map_state(move |state: &mut AppState| &mut state.p1.y),
+    );
+    let frag_p2_x = labeled_valued(
+        ("P2", html::sub("x"), ": "),
+        div(()),
+        textbox(state.p2.x).map_state(move |state: &mut AppState| &mut state.p2.x),
+    );
+    let frag_p2_y = labeled_valued(
+        ("P2", html::sub("y"), ": "),
+        div(()),
+        textbox(state.p2.y).map_state(move |state: &mut AppState| &mut state.p2.y),
+    );
+
+    let frag_options = div((frag_p1_x, frag_p1_y, frag_p2_x, frag_p2_y)).id("options");
+
     div((
-        div((div(frag_results).id("ui"), frag_plots)).id("pane-left"),
+        div((div((frag_options, frag_results)).id("ui"), frag_plots)).id("pane-left"),
         div(frag_svg).id("render-sheet"),
     ))
     .id("app-root")

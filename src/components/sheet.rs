@@ -40,10 +40,9 @@ pub struct DragAction<O> {
     pub data: O,
     pub event: MouseEvent,
 }
+impl<O> Action for DragAction<O> {}
 
-impl<O: Action> Action for DragAction<O> {}
-
-impl<DragData: Action + Copy + 'static> State<DragData> {
+impl<DragData: Copy + 'static> State<DragData> {
     pub fn view<Children: DomFragment<Self, DragAction<DragData>>>(
         &mut self,
         children: Children,
@@ -128,4 +127,3 @@ impl<DragData: Action + Copy + 'static> State<DragData> {
 
 #[derive(Debug, Clone, Copy)]
 pub enum NoData {}
-impl Action for NoData {}

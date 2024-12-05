@@ -57,19 +57,20 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
         self.int_helper(t) - self.num0
     }
 
-    /// Returns [q, κ]
-    fn eval_q(&self, t: D) -> [D; 2] {
-        let q = self.c * t * t + self.d * t + self.e;
-        let k = (self.a * t + self.b) / (q * q.sqrt());
-        [q, k]
+    pub fn kappa(&self, t: D) -> D {
+        let q = self.q(t);
+        (self.a * t + self.b) / (q * q.sqrt())
     }
 
-    pub fn kappa(&self, t: D) -> D {
-        self.eval_q(t)[1]
+    pub fn deriv_kappa(&self, t: D) -> D {
+        let q = self.q(t);
+        let q_sqrt = q.sqrt();
+        self.a / (q * q_sqrt)
+            - (self.a * t + self.b) * (self.c * t * 2. + self.d) * 1.5 / (q.powi(2) * q_sqrt)
     }
 
     pub fn q(&self, t: D) -> D {
-        self.eval_q(t)[0]
+        self.c * t * t + self.d * t + self.e
     }
 
     // fn report_endpoints(&self) -> [D; 2] {
@@ -112,53 +113,25 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
         HyperbezParams::new(a, b, c, d, e)
     }
 
-    // pub fn from_control(p1: Point, p2: Point) -> Self {
-    //     // let pts = this.cubic.pts;
-    //     // let chord = pts[3].minus(pts[0]).hypot();
-    //     let chord = 1.;
-    //     // let dx0 = pts[1].x - pts[0].x;
-    //     // let dy0 = pts[1].y - pts[0].y;
-    //     // let dx1 = pts[2].x - pts[3].x;
-    //     // let dy1 = pts[2].y - pts[3].y;
-    //     let dp0 = p1.to_vec2();
-    //     let dp1 = p2 - Point::new(1., 0.);
-    //     // let th0 = Math.atan2(-dy0, dx0);
-    //     // let th1 = Math.atan2(-dy1, -dx1);
-    //     let th0 = -(dp0.atan2());
-    //     let th1 = (-dp1).atan2();
-    //     let tens0 = dp0.hypot() / chord * 1.5 * (th0.cos() + 1.);
-    //     let tens1 = dp1.hypot() / chord * 1.5 * (th1.cos() + 1.);
-    //     let d0 = dp0.hypot() / chord;
-    //     let d1 = dp1.hypot() / chord;
-    //     let mut k0 = k_for_tension(tens0);
-    //     let mut k1 = k_for_tension(tens1);
-    //     let cbr = (k0 / k1).powf(1. / 3.);
-    //     fn soft(x: f64) -> f64 {
-    //         (0.5 * (1. + x * x)).sqrt()
-    //     }
-    //     k1 /= soft(cbr);
-    //     k0 /= soft(1. / cbr);
-
-    //     let dc = (p2 - p1).hypot() / chord;
-    //     let kmid = dc.powf(1.5);
-    //     let ratio = (d0 / d1).powf(1.5);
-    //     let blend = 0.5 + 0.5 * (3. - 10. * dc).tanh();
-    //     k0 += blend * (kmid / ratio - k0);
-    //     k1 += blend * (kmid * ratio - k1);
-    //     let [c, d] = quadratic_for_endk(k0, k1);
-    //     //console.log('dc', dc, 'c', cd.c, 'd', cd.d);
-    //     let endk = endk_for_quadratic(c, d);
-    //     // console.log(dc, k0, k1, blend);
-    //     let [a, b] = solve_thetas(th0, th1, c, d, 1.);
-    //     HyperbezParams::new(a, b, c, d, 1.)
-    // }
-
     /// Returns [θ0, θ1]
     pub fn calc_thetas(&self) -> [D; 2] {
         let p = self.integrate(D::from(1.));
         let th0 = p.y.atan2(p.x);
         let th1 = self.theta(D::from(1.)) - th0;
         [th0, th1]
+    }
+
+    pub fn subsegment(&self, range: std::ops::Range<D>) -> Self {
+        let (t0, t1) = (range.start, range.end);
+        let dt = t1 - t0;
+        let a = self.a * dt;
+        let b = self.b + self.a * t0;
+        let c = self.c * dt * dt;
+        let d = (self.d + self.c * t0 * 2.) * dt;
+        let e = self.c * t0 * t0 + self.d * t0 + 1.;
+        let s = D::from(1.) / e;
+        let ps = dt * s * s.sqrt();
+        HyperbezParams::new(a * ps, b * ps, c * s, d * s, D::from(1.))
     }
 
     pub fn a(&self) -> D {
@@ -245,18 +218,9 @@ impl ParamCurve for Hyperbezier {
     }
 
     fn subsegment(&self, range: std::ops::Range<f64>) -> Self {
-        let (t0, t1) = (range.start, range.end);
-        let dt = t1 - t0;
-        let a = self.params.a * dt;
-        let b = self.params.b + self.params.a * t0;
-        let c = self.params.c * dt * dt;
-        let d = (self.params.d + 2. * self.params.c * t0) * dt;
-        let e = self.params.c * t0 * t0 + self.params.d * t0 + 1.;
-        let s = 1. / e;
-        let ps = dt * s * s.sqrt();
-        let params = HyperbezParams::new(a * ps, b * ps, c * s, d * s, 1.);
-        let p0 = self.eval(t0);
-        let p1 = self.eval(t1);
+        let params = self.params.subsegment(range.clone());
+        let p0 = self.eval(range.start);
+        let p1 = self.eval(range.end);
         Hyperbezier::from_points_params(params, p0, p1)
     }
 }

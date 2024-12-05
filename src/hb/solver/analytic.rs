@@ -9,6 +9,24 @@ use crate::utils::*;
 
 use super::*;
 
+impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
+    pub fn kappa_extrema(&self) -> ArrayVec<D, 2> {
+        let quad_a = self.a * self.c * 4.;
+        let quad_b = self.a * self.d + self.b * self.c * 6.;
+        let quad_c = self.b * self.d * 3. - self.a * 2.;
+        let det = (quad_b.powi(2) - quad_a * quad_c * 4.).sqrt();
+        if !det.re().is_finite() {
+            return ArrayVec::new();
+        }
+        let p = (-quad_b + det) / quad_a * 0.5;
+        let m = (-quad_b - det) / quad_a * 0.5;
+        [(m.re() < 0.).then_some(m), (p.re() > 1.).then_some(p)]
+            .into_iter()
+            .flatten()
+            .collect()
+    }
+}
+
 impl HyperbezParams<f64> {
     pub fn from_control(p1: Point, p2: Point) -> Self {
         // let pts = this.cubic.pts;
