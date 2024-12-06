@@ -8,6 +8,30 @@ use xilem_web::{
     DomFragment, DomView,
 };
 
+#[derive(Debug)]
+pub struct Memoized<K, V> {
+    key: K,
+    value: Option<V>,
+}
+
+impl<K: PartialEq, V> Memoized<K, V> {
+    pub fn update(&mut self, data: K, logic: impl FnOnce(&K) -> V) -> &V {
+        if (self.key != data) || self.value.is_none() {
+            self.value = Some(logic(&data));
+        }
+        self.value.as_ref().unwrap()
+    }
+}
+
+impl<K: Default, V> Default for Memoized<K, V> {
+    fn default() -> Self {
+        Self {
+            key: Default::default(),
+            value: None,
+        }
+    }
+}
+
 pub fn slider(value: f64, min: f64, max: f64, step: f64) -> impl DomView<f64> {
     input(())
         .attr("value", value)

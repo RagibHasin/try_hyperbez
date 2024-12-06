@@ -36,7 +36,7 @@ pub enum DragElement<O = NoData> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DragAction<O> {
+pub struct DragAction<O = NoData> {
     pub data: O,
     pub event: MouseEvent,
 }
@@ -68,7 +68,6 @@ impl<DragData: Copy + 'static> State<DragData> {
                     DragElement::Sheet => {
                         let delta =
                             state.zoom * Vec2::new(e.movement_x() as f64, e.movement_y() as f64);
-                        tracing::trace!(?delta);
                         state.origin -= delta;
                         None
                     }
@@ -89,7 +88,6 @@ impl<DragData: Copy + 'static> State<DragData> {
                 let origin_delta = (factor - 1.)
                     * state.zoom
                     * Vec2::new(e.offset_x() as f64, e.offset_y() as f64);
-                tracing::trace!(factor, ?origin_delta);
                 state.origin -= origin_delta;
                 state.zoom *= factor;
             })

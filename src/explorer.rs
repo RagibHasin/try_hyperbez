@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{ops::Range, rc::Rc};
 
 use xilem_web::{
     elements::{
@@ -7,14 +7,24 @@ use xilem_web::{
     },
     interfaces::*,
     svg::kurbo::{self, Affine, Circle, Line, ParamCurve, Point, Vec2},
-    DomView,
+    AnyDomView, DomView,
 };
 
 use hyperbez_toy::*;
 
 use crate::components::*;
 
+#[derive(Default)]
 pub(crate) struct AppState {
+    data: AppData,
+    memo: Memoized<AppData, MemoizedState>,
+
+    plots: plots::State,
+    sheet: sheet::State,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+struct AppData {
     a: f64,
     b: f64,
     c: f64,
@@ -22,14 +32,22 @@ pub(crate) struct AppState {
 
     optimize: bool,
     accuracy_order: f64,
+}
 
-    plots: plots::State,
-    sheet: sheet::State,
+struct MemoizedState {
+    hyperbez: hb::Hyperbezier,
+    theta: Rc<[f64]>,
+    kappa: Rc<[f64]>,
+
+    frag_path: Rc<AnyDomView<sheet::State, sheet::DragAction>>,
+    frag_points: Rc<AnyDomView<sheet::State, sheet::DragAction>>,
+    frag_results: Rc<AnyDomView<AppState>>,
+    frag_options: Rc<AnyDomView<AppData>>,
 }
 
 const BASE_WIDTH: f64 = 500.;
 
-impl Default for AppState {
+impl Default for AppData {
     fn default() -> Self {
         Self {
             a: 0.,
@@ -38,8 +56,6 @@ impl Default for AppState {
             d: 1.,
             optimize: false,
             accuracy_order: 1.,
-            plots: Default::default(),
-            sheet: Default::default(),
         }
     }
 }
@@ -58,12 +74,12 @@ pub fn d_limit_rounded(a: f64, b: f64, c: f64) -> Range<f64> {
     ((d_limit.start * 10.).ceil() / 10.)..(((d_limit.end - f64::EPSILON) * 10.).floor() / 10.)
 }
 
-pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
-    let d_limit = d_limit_rounded(state.a, state.b, state.c);
+fn memoized_app_logic(data: &AppData) -> MemoizedState {
+    let d_limit = d_limit_rounded(data.a, data.b, data.c);
     // state.d = state.d.clamp(d_limit.start, d_limit.end);
 
     let hyperbez = hb::Hyperbezier::from_points_params(
-        hb::HyperbezParams::new(state.a, state.b, state.c, state.d, 1.),
+        hb::HyperbezParams::new(data.a, data.b, data.c, data.d, 1.),
         Point::ZERO,
         Point::new(BASE_WIDTH, 0.),
     );
@@ -74,23 +90,22 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     //     tracing::trace!(?arg_uv, ?int_theta);
     // }
 
-    let accuracy = 10f64.powf(-state.accuracy_order);
+    let accuracy = 10f64.powf(-data.accuracy_order);
     let path = Affine::FLIP_Y
-        * if state.optimize {
+        * if data.optimize {
             kurbo::fit_to_bezpath_opt(&hyperbez, accuracy)
         } else {
             kurbo::fit_to_bezpath(&hyperbez, accuracy)
         };
     let arclen = hyperbez.scale_rot().length() / BASE_WIDTH;
-    let (theta, kappa): (Vec<_>, Vec<_>) = (0..=1000)
-        .map(|i| i as f64 * 1e-3)
-        .map(|t| {
-            (
-                hyperbez.theta(t).to_degrees(),
-                hyperbez.kappa(t) * hyperbez.scale_rot().length(),
-            )
-        })
-        .unzip();
+    let plot_points = (0..=1000).map(|i| i as f64 * 1e-3);
+    let theta = plot_points
+        .clone()
+        .map(|t| hyperbez.theta(t).to_degrees())
+        .collect::<Rc<_>>();
+    let kappa = plot_points
+        .map(|t| hyperbez.kappa(t) * hyperbez.scale_rot().length())
+        .collect::<Rc<_>>();
     let theta0 = *theta.first().unwrap();
     let theta1 = *theta.last().unwrap();
     let kappa0 = *kappa.first().unwrap();
@@ -103,6 +118,111 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
         .filter_map(|e| e.end_point())
         .map(|p| Circle::new(p, NODE_RADIUS))
         .collect::<Vec<_>>();
+    let n_points = points.len();
+
+    let frag_path = path.id("hyperbez");
+    let frag_points = g(points).id("nodes");
+
+    let frag_arclen = labeled_valued("S / b: ", (), format!("{:.3}", arclen));
+    let frag_theta0 = labeled_valued("θ₀: ", (), format!("{:.1}°", theta0));
+    let frag_theta1 = labeled_valued("θ₁: ", (), format!("{:.1}°", theta1));
+    let frag_kappa0 = labeled_valued("κ₀: ", (), format!("{:.3}", kappa0));
+    let frag_kappa1 = labeled_valued("κ₁: ", (), format!("{:.3}", kappa1));
+    let frag_n_points = labeled_valued("n: ", (), n_points);
+
+    let frag_results = div((
+        frag_arclen,
+        spacer(),
+        frag_theta0,
+        frag_theta1,
+        spacer(),
+        frag_kappa0,
+        frag_kappa1,
+        spacer(),
+        frag_n_points,
+    ))
+    .class("results");
+
+    let frag_a = labeled_valued(
+        "a: ",
+        slider(data.a, -20., 20., 0.2).map_state(move |data: &mut AppData| &mut data.a),
+        textbox(data.a).map_state(move |data: &mut AppData| &mut data.a),
+    );
+    let frag_b = labeled_valued(
+        "b: ",
+        slider(data.b, -20., 20., 0.2).map_state(move |data: &mut AppData| &mut data.b),
+        textbox(data.b).map_state(move |data: &mut AppData| &mut data.b),
+    );
+    let frag_c = labeled_valued(
+        "c: ",
+        slider(data.c, 0.1, 10., 0.1).adapt(move |data: &mut AppData, thunk| {
+            let mut temp_c = data.c;
+            let r = thunk.call(&mut temp_c);
+            data.c = if temp_c == 0. {
+                if data.c > 0. {
+                    -0.1
+                } else {
+                    0.1
+                }
+            } else {
+                temp_c
+            };
+            r
+        }),
+        textbox(data.c).map_state(move |data: &mut AppData| &mut data.c),
+    );
+    let frag_d = labeled_valued(
+        "d: ",
+        slider(data.d, d_limit.start, d_limit.end, 0.1)
+            .map_state(move |data: &mut AppData| &mut data.d),
+        textbox(data.d).map_state(move |data: &mut AppData| &mut data.d),
+    );
+
+    let frag_optimize = button(if data.optimize {
+        "Do not optimize"
+    } else {
+        "Optimize"
+    })
+    .on_click(|data: &mut AppData, _| data.optimize = !data.optimize);
+    let frag_accuracy = labeled_valued(
+        "log(α): ",
+        slider(data.accuracy_order, 1., 4., 1.)
+            .map_state(move |data: &mut AppData| &mut data.accuracy_order),
+        data.accuracy_order,
+    );
+
+    let frag_options = div((
+        frag_a,
+        frag_b,
+        frag_c,
+        frag_d,
+        spacer(),
+        frag_optimize,
+        frag_accuracy,
+    ))
+    .id("options");
+
+    MemoizedState {
+        hyperbez,
+        theta,
+        kappa,
+        frag_results: Rc::new(frag_results),
+        frag_path: Rc::new(frag_path),
+        frag_points: Rc::new(frag_points),
+        frag_options: Rc::new(frag_options),
+    }
+}
+
+pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
+    let MemoizedState {
+        hyperbez,
+        theta,
+        kappa,
+        frag_path,
+        frag_points,
+        frag_results,
+        frag_options,
+    } = state.memo.update(state.data, memoized_app_logic);
 
     let mut hovered_point = None;
     let mut hovered_theta = None;
@@ -133,13 +253,6 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
             .class("hover"),
         );
     };
-
-    let frag_arclen = labeled_valued("S / b: ", (), format!("{:.3}", arclen));
-    let frag_theta0 = labeled_valued("θ₀: ", (), format!("{:.1}°", theta0));
-    let frag_theta1 = labeled_valued("θ₁: ", (), format!("{:.1}°", theta1));
-    let frag_kappa0 = labeled_valued("κ₀: ", (), format!("{:.3}", kappa0));
-    let frag_kappa1 = labeled_valued("κ₁: ", (), format!("{:.3}", kappa1));
-    let frag_n_points = labeled_valued("n: ", (), points.len());
 
     let empty = "~".to_string();
     let frag_hovered_s = labeled_valued(
@@ -172,18 +285,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     );
 
     let frag_results = (
-        div((
-            frag_arclen,
-            spacer(),
-            frag_theta0,
-            frag_theta1,
-            spacer(),
-            frag_kappa0,
-            frag_kappa1,
-            spacer(),
-            frag_n_points,
-        ))
-        .class("results"),
+        frag_results.clone(),
         div((
             frag_hovered_s,
             frag_hovered_p_x,
@@ -196,78 +298,26 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
 
     let frag_plots = state
         .plots
-        .view(&theta, &kappa)
+        .view(theta, kappa)
         .map_state(|state: &mut AppState| &mut state.plots);
 
     let frag_svg = state
         .sheet
-        .view((path.id("hyperbez"), hover_mark, g(points).id("nodes")))
+        .view((frag_path.clone(), hover_mark, frag_points.clone()))
         .adapt(move |state: &mut AppState, thunk| thunk.call(&mut state.sheet).map(|_| {}));
 
-    let frag_a = labeled_valued(
-        "a: ",
-        slider(state.a, -20., 20., 0.2).map_state(move |state: &mut AppState| &mut state.a),
-        textbox(state.a).map_state(move |state: &mut AppState| &mut state.a),
-    );
-    let frag_b = labeled_valued(
-        "b: ",
-        slider(state.b, -20., 20., 0.2).map_state(move |state: &mut AppState| &mut state.b),
-        textbox(state.b).map_state(move |state: &mut AppState| &mut state.b),
-    );
-    let frag_c = labeled_valued(
-        "c: ",
-        slider(state.c, 0.1, 10., 0.1).adapt(move |state: &mut AppState, thunk| {
-            let mut temp_c = state.c;
-            let r = thunk.call(&mut temp_c);
-            state.c = if temp_c == 0. {
-                if state.c > 0. {
-                    -0.1
-                } else {
-                    0.1
-                }
-            } else {
-                temp_c
-            };
-            r
-        }),
-        textbox(state.c).map_state(move |state: &mut AppState| &mut state.c),
-    );
-    let frag_d = labeled_valued(
-        "d: ",
-        slider(state.d, d_limit.start, d_limit.end, 0.1)
-            .map_state(move |state: &mut AppState| &mut state.d),
-        textbox(state.d).map_state(move |state: &mut AppState| &mut state.d),
-    );
-
-    let frag_optimize = button({
-        let this = &state;
-        if this.optimize {
-            "Do not optimize"
-        } else {
-            "Optimize"
-        }
-    })
-    .on_click(|state: &mut AppState, _| state.optimize = !state.optimize);
-    let frag_accuracy = labeled_valued(
-        "log(α): ",
-        slider(state.accuracy_order, 1., 4., 1.)
-            .map_state(move |state: &mut AppState| &mut state.accuracy_order),
-        state.accuracy_order,
-    );
-
-    let frag_options = div((
-        frag_a,
-        frag_b,
-        frag_c,
-        frag_d,
-        spacer(),
-        frag_optimize,
-        frag_accuracy,
-    ))
-    .id("options");
-
     div((
-        div((div((frag_options, frag_results)).id("ui"), frag_plots)).id("pane-left"),
+        div((
+            div((
+                frag_options
+                    .clone()
+                    .map_state(|state: &mut AppState| &mut state.data),
+                frag_results,
+            ))
+            .id("ui"),
+            frag_plots,
+        ))
+        .id("pane-left"),
         div(frag_svg).id("render-sheet"),
     ))
     .id("app-root")
