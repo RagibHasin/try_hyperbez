@@ -27,6 +27,8 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
     }
 }
 
+const PI_2: f64 = f64::consts::FRAC_PI_2;
+
 impl HyperbezParams<f64> {
     pub fn from_control(p1: Point, p2: Point) -> Self {
         // let pts = this.cubic.pts;
@@ -206,8 +208,7 @@ impl HyperbezParams<f64> {
         move |[a, b, c, d, t]: [f64; 5]| -> ([f64; 5], [[f64; 5]; 5]) {
             let hb = HyperbezParams::new(a, b, c, d, 1.);
 
-            let p1 = hb.integrate(1.);
-            let p1 = Vec2::new(p1.x, p1.y);
+            let p1 = as_vec2(hb.integrate(1.));
             let p1_hypot = p1.hypot();
             let p0_5 = hb.integrate(t) / p1_hypot;
             let phi0_5 = hb.theta(t);
@@ -293,18 +294,6 @@ impl HyperbezParams<f64> {
             (err, jac)
         }
     }
-}
-
-const PI_2: f64 = f64::consts::FRAC_PI_2;
-
-fn norm_radians(mut theta: f64) -> f64 {
-    theta = theta.rem_euclid(f64::consts::TAU);
-    if theta > f64::consts::PI {
-        theta -= f64::consts::TAU;
-    } else if theta < -f64::consts::PI {
-        theta += f64::consts::TAU;
-    }
-    theta
 }
 
 #[must_use]

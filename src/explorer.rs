@@ -1,8 +1,9 @@
 use std::{ops::Range, rc::Rc};
 
+use wasm_bindgen::JsCast;
 use xilem_web::{
     elements::{
-        html::{self, button, div},
+        html::{self, div, option, select},
         svg::g,
     },
     interfaces::*,
@@ -30,10 +31,16 @@ struct AppData {
     c: f64,
     d: f64,
 
-    optimize: bool,
+    render_method: RenderMethod,
     accuracy_order: f64,
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+enum RenderMethod {
+    UnoptimizedCurveFit,
+    OptimizedCurveFit,
+    SubdivisionSolve,
+}
 struct MemoizedState {
     hyperbez: hb::Hyperbezier,
     theta: Rc<[f64]>,
@@ -54,7 +61,7 @@ impl Default for AppData {
             b: -1.,
             c: -1.,
             d: 1.,
-            optimize: false,
+            render_method: RenderMethod::UnoptimizedCurveFit,
             accuracy_order: 1.,
         }
     }
@@ -92,10 +99,10 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
 
     let accuracy = 10f64.powf(-data.accuracy_order);
     let path = Affine::FLIP_Y
-        * if data.optimize {
-            kurbo::fit_to_bezpath_opt(&hyperbez, accuracy)
-        } else {
-            kurbo::fit_to_bezpath(&hyperbez, accuracy)
+        * match data.render_method {
+            RenderMethod::UnoptimizedCurveFit => kurbo::fit_to_bezpath(&hyperbez, accuracy),
+            RenderMethod::OptimizedCurveFit => kurbo::fit_to_bezpath_opt(&hyperbez, accuracy),
+            RenderMethod::SubdivisionSolve => hyperbez.render(accuracy),
         };
     let arclen = hyperbez.scale_rot().length() / BASE_WIDTH;
     let plot_points = (0..=1000).map(|i| i as f64 * 1e-3);
@@ -178,12 +185,37 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
         textbox(data.d).map_state(move |data: &mut AppData| &mut data.d),
     );
 
-    let frag_optimize = button(if data.optimize {
-        "Do not optimize"
-    } else {
-        "Optimize"
-    })
-    .on_click(|data: &mut AppData, _| data.optimize = !data.optimize);
+    let frag_render_method = select((
+        option("Unoptimized Curve Fitting")
+            .value("UnoptimizedCurveFit")
+            .selected(matches!(
+                data.render_method,
+                RenderMethod::UnoptimizedCurveFit
+            )),
+        option("Optimized Curve Fitting")
+            .value("OptimizedCurveFit")
+            .selected(matches!(
+                data.render_method,
+                RenderMethod::OptimizedCurveFit
+            )),
+        option("Subdivision Solve")
+            .value("SubdivisionSolve")
+            .selected(matches!(data.render_method, RenderMethod::SubdivisionSolve)),
+    ))
+    .on_change(move |data: &mut AppData, e| {
+        match e
+            .target()
+            .unwrap()
+            .unchecked_into::<web_sys::HtmlSelectElement>()
+            .value()
+            .as_ref()
+        {
+            "UnoptimizedCurveFit" => data.render_method = RenderMethod::UnoptimizedCurveFit,
+            "OptimizedCurveFit" => data.render_method = RenderMethod::OptimizedCurveFit,
+            "SubdivisionSolve" => data.render_method = RenderMethod::SubdivisionSolve,
+            _ => {}
+        }
+    });
     let frag_accuracy = labeled_valued(
         "log(α): ",
         slider(data.accuracy_order, 1., 4., 1.)
@@ -197,7 +229,7 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
         frag_c,
         frag_d,
         spacer(),
-        frag_optimize,
+        frag_render_method,
         frag_accuracy,
     ))
     .id("options");

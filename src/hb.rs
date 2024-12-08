@@ -11,6 +11,8 @@ use kurbo::{
 use nalgebra::Vector2;
 use num_dual::DualNum;
 
+use crate::utils::*;
+
 #[derive(Clone, Copy, Debug)]
 pub struct HyperbezParams<D> {
     a: D,
@@ -168,8 +170,7 @@ pub struct Hyperbezier {
 impl Hyperbezier {
     /// Create a new hyperbezier curve with given parameters and end points.
     pub fn from_points_params(params: HyperbezParams<f64>, p0: Point, p1: Point) -> Self {
-        let uv = params.integrate(1.0);
-        let uv = Vec2::new(uv.x, uv.y);
+        let uv = as_vec2(params.integrate(1.0));
         let uv_scaled = uv / uv.length_squared();
         let d = p1 - p0;
         let scale_rot = Vec2::new(uv_scaled.dot(d), uv_scaled.cross(d));
@@ -422,6 +423,8 @@ pub fn solve_thetas(th0: f64, th1: f64, c: f64, d: f64, e: f64) -> [f64; 2] {
     }
     [a, b]
 }
+
+pub mod render;
 
 pub mod solver {
     use nalgebra::{SVector, Vector5};

@@ -1,6 +1,6 @@
 use std::f64;
 
-use xilem_web::svg::kurbo::{CubicBez, ParamCurve, ParamCurveDeriv, Point};
+use xilem_web::svg::kurbo::{CubicBez, ParamCurve, ParamCurveDeriv, Point, Vec2};
 
 use crate::hb::{k_for_tension, quadratic_for_endk, solver};
 
@@ -15,6 +15,12 @@ pub fn norm_radians<D: num_dual::DualNum<f64> + Copy>(theta: D) -> D {
 pub fn radian_in_line(theta: f64) -> bool {
     (theta % f64::consts::PI).abs() <= 0.01
 }
+
+pub fn as_vec2(v: nalgebra::Vector2<f64>) -> Vec2 {
+    Vec2::new(v.x, v.y)
+}
+
+// MARK: Solver
 
 pub fn solve_helper<R>(p1: Point, p2: Point, solve: impl Fn(CubicBez, f64, usize) -> R) -> R {
     let cubicbez = CubicBez::new(Point::ZERO, p1, p2, Point::new(1., 0.));
