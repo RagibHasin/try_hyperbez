@@ -103,7 +103,7 @@ impl HyperbezParams<f64> {
 
     pub fn dtheta_dc(&self, t: f64) -> f64 {
         let denom = self.denom();
-        let term1 = 2. * self.num0 * denom;
+        let term1 = 2. * self.num0_e_sqrt * denom;
         let term2 = -self.int_helper(t) * t.powi(2) / (2. * self.q(t));
         let term3 = 2. * denom * (-self.int_helper(t) + self.b * t / self.q(t).sqrt());
         term1 + term2 + term3
@@ -111,7 +111,7 @@ impl HyperbezParams<f64> {
 
     pub fn dtheta_dd(&self, t: f64) -> f64 {
         let denom = self.denom();
-        let term1 = -self.d * self.num0 * denom;
+        let term1 = -self.d * self.num0_e_sqrt * denom;
         let term2 = -self.b * denom;
         let term3 = -self.int_helper(t) * t / (2. * self.q(t));
         let term4 =

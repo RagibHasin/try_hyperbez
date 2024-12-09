@@ -21,16 +21,15 @@ pub struct HyperbezParams<D> {
     d: D,
     e: D,
 
-    num0: D,
+    num0_e_sqrt: D,
     num1: D,
 }
 
 impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
     /// Create a new hyperbezier with the given parameters.
     pub fn new(a: D, b: D, c: D, d: D, e: D) -> Self {
-        let denom = D::from(2.) / (c * 4. - d * d);
-        let beta0 = d * denom;
-        let num0 = a * (-d * beta0 * 0.5 - 1.) / c + b * beta0;
+        let denom = D::from(2.) / (c * e * 4. - d * d);
+        let num0_e_sqrt = b * d * denom - a * e * 2. * denom;
         let num1 = (b * c * 2. - d * a) * denom;
 
         HyperbezParams {
@@ -39,15 +38,13 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
             c,
             d,
             e,
-            num0,
+            num0_e_sqrt,
             num1,
         }
     }
 
     fn int_helper(&self, t: D) -> D {
-        // assumes self.e = 1
-        let q = self.c * t * t + self.d * t + 1.;
-        (self.num0 + self.num1 * t) / q.sqrt()
+        (self.num0_e_sqrt + self.num1 * t) / self.q(t).sqrt()
     }
 
     /// Determine the angle for the given parameter.
@@ -56,7 +53,7 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
     /// curve. The `t` parameter ranges from 0 to 1, and the returned
     /// value is 0 for `t = 0`.
     pub fn theta(&self, t: D) -> D {
-        self.int_helper(t) - self.num0
+        self.int_helper(t) - self.num0_e_sqrt / self.e.sqrt()
     }
 
     pub fn kappa(&self, t: D) -> D {
@@ -131,9 +128,7 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
         let c = self.c * dt * dt;
         let d = (self.d + self.c * t0 * 2.) * dt;
         let e = self.c * t0 * t0 + self.d * t0 + 1.;
-        let s = D::from(1.) / e;
-        let ps = dt * s * s.sqrt();
-        HyperbezParams::new(a * ps, b * ps, c * s, d * s, D::from(1.))
+        HyperbezParams::new(a * dt, b * dt, c, d, e)
     }
 
     pub fn a(&self) -> D {
@@ -155,7 +150,7 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
         self.num1
     }
     pub fn num0(&self) -> D {
-        self.num0
+        self.num0_e_sqrt
     }
 }
 

@@ -30,6 +30,7 @@ struct AppData {
     b: f64,
     c: f64,
     d: f64,
+    e: f64,
 
     render_method: RenderMethod,
     accuracy_order: f64,
@@ -61,6 +62,7 @@ impl Default for AppData {
             b: -1.,
             c: -1.,
             d: 1.,
+            e: 1.,
             render_method: RenderMethod::UnoptimizedCurveFit,
             accuracy_order: 1.,
         }
@@ -86,7 +88,7 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     // state.d = state.d.clamp(d_limit.start, d_limit.end);
 
     let hyperbez = hb::Hyperbezier::from_points_params(
-        hb::HyperbezParams::new(data.a, data.b, data.c, data.d, 1.),
+        hb::HyperbezParams::new(data.a, data.b, data.c, data.d, data.e),
         Point::ZERO,
         Point::new(BASE_WIDTH, 0.),
     );
@@ -184,6 +186,11 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
             .map_state(move |data: &mut AppData| &mut data.d),
         textbox(data.d).map_state(move |data: &mut AppData| &mut data.d),
     );
+    let frag_e = labeled_valued(
+        "e: ",
+        slider(data.e, 0.1, 20., 0.1).map_state(move |data: &mut AppData| &mut data.e),
+        textbox(data.e).map_state(move |data: &mut AppData| &mut data.e),
+    );
 
     let frag_render_method = select((
         option("Unoptimized Curve Fitting")
@@ -228,6 +235,7 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
         frag_b,
         frag_c,
         frag_d,
+        frag_e,
         spacer(),
         frag_render_method,
         frag_accuracy,
