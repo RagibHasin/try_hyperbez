@@ -18,6 +18,7 @@ impl<K: PartialEq, V> Memoized<K, V> {
     pub fn update(&mut self, data: K, logic: impl FnOnce(&K) -> V) -> &V {
         if (self.key != data) || self.value.is_none() {
             self.value = Some(logic(&data));
+            self.key = data;
         }
         self.value.as_ref().unwrap()
     }
