@@ -2,30 +2,12 @@ use std::f64;
 
 use xilem_web::svg::kurbo;
 
-use kurbo::{common::GAUSS_LEGENDRE_COEFFS_32, Affine, Point, Vec2};
+use kurbo::{Affine, Point, Vec2};
 use nalgebra::{ArrayStorage, Matrix5, Vector5};
 
 use crate::utils::*;
 
 use super::*;
-
-impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
-    pub fn kappa_extrema(&self) -> ArrayVec<D, 2> {
-        let quad_a = self.a * self.c * 4.;
-        let quad_b = self.a * self.d + self.b * self.c * 6.;
-        let quad_c = self.b * self.d * 3. - self.a * 2.;
-        let det = (quad_b.powi(2) - quad_a * quad_c * 4.).sqrt();
-        if !det.re().is_finite() {
-            return ArrayVec::new();
-        }
-        let p = (-quad_b + det) / quad_a * 0.5;
-        let m = (-quad_b - det) / quad_a * 0.5;
-        [(m.re() < 0.).then_some(m), (p.re() > 1.).then_some(p)]
-            .into_iter()
-            .flatten()
-            .collect()
-    }
-}
 
 const PI_2: f64 = f64::consts::FRAC_PI_2;
 
@@ -69,22 +51,6 @@ impl HyperbezParams<f64> {
         // console.log(dc, k0, k1, blend);
         let [a, b] = solve_thetas(th0, th1, c, d, 1.);
         HyperbezParams::new(a, b, c, d, 1.)
-    }
-
-    fn integrate_any<R: std::ops::Add<Output = R> + std::ops::Mul<f64, Output = R>>(
-        &self,
-        f: impl Fn(f64) -> R,
-        init: R,
-        t: f64,
-    ) -> R {
-        // TODO: improve accuracy by subdividing in near-cusp cases
-        let mut xy = init;
-        let u0 = 0.5 * t;
-        for (wi, xi) in GAUSS_LEGENDRE_COEFFS_32 {
-            let u = u0 + u0 * xi;
-            xy = xy + f(u) * *wi;
-        }
-        xy * u0
     }
 
     fn denom(&self) -> f64 {

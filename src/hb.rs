@@ -72,6 +72,42 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
         self.c * t * t + self.d * t + self.e
     }
 
+    pub fn kappa_extrema(&self) -> ArrayVec<D, 2> {
+        fn filter_and_collect<D: DualNum<f64> + Copy, const N: usize>(
+            array: [D; N],
+        ) -> ArrayVec<D, 2> {
+            array
+                .into_iter()
+                .filter(|t| (0.0..1.).contains(&t.re()))
+                .collect()
+        }
+
+        let a = self.a;
+        let b = self.b;
+        let c = self.c;
+        let d = self.d;
+        let e = self.e;
+
+        match (a.re() == 0., c.re() == 0.) {
+            (true, true) => ArrayVec::new(),
+            (true, false) => filter_and_collect([-d / c * 0.5]),
+            (false, true) => filter_and_collect([(a * e * 2. - b * d * 3.) / (a * d)]),
+            (false, false) => {
+                let quad_a = -a * c * 4.;
+                let quad_b = -a * d - b * c * 6.;
+                let quad_c = a * e * 2. - b * d * 3.;
+                let det = (quad_b.powi(2) - quad_a * quad_c * 4.).sqrt();
+                if !det.re().is_finite() {
+                    return ArrayVec::new();
+                }
+                filter_and_collect([
+                    (-quad_b - det) / quad_a * 0.5,
+                    (-quad_b + det) / quad_a * 0.5,
+                ])
+            }
+        }
+    }
+
     // fn report_endpoints(&self) -> [D; 2] {
     //     let mut sum = D::from(0.);
     //     for (wi, xi) in GAUSS_LEGENDRE_COEFFS_32 {
@@ -88,21 +124,68 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
     //     [q0.powf(-1.5) / integral, q1.powf(-1.5) / integral]
     // }
 
+    fn integrate_any<R: std::ops::Add<Output = R> + std::ops::Mul<D, Output = R>>(
+        &self,
+        f: impl Fn(D) -> R,
+        init: R,
+        t: D,
+    ) -> R {
+        let mut xy = init;
+        let u0 = t * 0.5;
+        for (wi, xi) in GAUSS_LEGENDRE_COEFFS_32 {
+            let u = u0 + u0 * *xi;
+            xy = xy + f(u) * D::from(*wi);
+        }
+        xy * u0
+    }
+
     /// Evaluate the position of the raw curve.
     ///
     /// This is simply the integral of the Whewell representation,
     /// so that the total arc length is unit, and the initial tangent
     /// is horizontal.
     pub fn integrate(&self, t: D) -> Vector2<D> {
-        // TODO: improve accuracy by subdividing in near-cusp cases
-        let mut xy = Vector2::new(D::from(0.), D::from(0.));
-        let u0 = t * 0.5;
-        for (wi, xi) in GAUSS_LEGENDRE_COEFFS_32 {
-            let u = u0 + u0 * *xi;
-            let (y, x) = self.theta(u).sin_cos();
-            xy += Vector2::new(x, y) * D::from(*wi);
+        let zero = Vector2::new(D::from(0.), D::from(0.));
+
+        let integrate_self = |end_t| {
+            self.integrate_any(
+                |u| {
+                    let (y, x) = self.theta(u).sin_cos();
+                    Vector2::new(x, y)
+                },
+                zero,
+                end_t,
+            )
+        };
+
+        let integrate_subseg = |w0, w1, end_t: Option<_>| {
+            let theta_w0 = self.theta(w0);
+            let subseg = self.subsegment(w0..w1);
+            let dw = w1 - w0;
+            subseg.integrate_any(
+                |u| {
+                    let (y, x) = (theta_w0 + subseg.theta(u)).sin_cos();
+                    Vector2::new(x, y)
+                },
+                zero,
+                end_t.unwrap_or((t - w0) / dw),
+            ) * dw
+        };
+
+        match *self.kappa_extrema().as_slice() {
+            [] => integrate_self(t),
+            [w0, ..] if t.re() <= w0.re() => integrate_self(t),
+            [w0] => integrate_subseg(w0, D::from(1.), None) + integrate_self(w0),
+            [w0, w1] if (w0.re()..w1.re()).contains(&t.re()) => {
+                integrate_subseg(w0, w1, None) + integrate_self(w0)
+            }
+            [w0, w1] => {
+                integrate_subseg(w1, D::from(1.), None)
+                    + integrate_subseg(w0, w1, Some(D::from(1.)))
+                    + integrate_self(w0)
+            }
+            _ => unreachable!(),
         }
-        xy * u0
     }
 
     pub fn make(a: D, b: D, c0: D, c1: D) -> Self {
@@ -450,4 +533,36 @@ pub mod solver {
 
     pub mod analytic;
     pub mod dual;
+}
+
+#[allow(unused_must_use)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test_log::test;
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test1() {
+        let hb = HyperbezParams::new(0., -1., -1., 1., 1.);
+        let seg0 = hb.subsegment(0.0..0.5);
+        let seg1 = hb.subsegment(0.5..1.);
+        tracing::trace!(?seg0, ?seg1);
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test2() {
+        let hb = HyperbezParams::new(
+            0.,
+            -0.004213609035097804,
+            15.592889809259216,
+            -7.892748222945392,
+            1.,
+        );
+        let extrema = hb.kappa_extrema();
+        let seg0 = hb.subsegment(0.0..0.5);
+        let seg1 = hb.subsegment(0.5..1.);
+        tracing::trace!(?extrema, ?seg0, ?seg1);
+    }
 }
