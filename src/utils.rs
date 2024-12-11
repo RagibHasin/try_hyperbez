@@ -115,7 +115,7 @@ pub fn solve_inferring<R: std::fmt::Debug>(
         let guess = [0., guess_b, guess_c, guess_d, guess_t];
         tracing::trace!(?guess);
 
-        let cdt = solver::dual::solve_for_cdt_exact(p0_5, phi0_5, guess, 1e-2, 5);
+        let cdt = solver::ptan_dual::solve_for_cdt_exact(p0_5, phi0_5, guess, 1e-2, 5);
         tracing::trace!(?cdt);
 
         let [.., guess_c, guess_d, guess_t] = if let Ok(solver::Solution { params, .. }) = cdt {
@@ -126,7 +126,7 @@ pub fn solve_inferring<R: std::fmt::Debug>(
         let guess_b = make_guess_b(guess_c, guess_d, theta1, theta0);
         tracing::trace!(guess_b, guess_c, guess_d, guess_t);
 
-        let s = solver::dual::solve_for_ab_exact(
+        let s = solver::ptan_dual::solve_for_ab_exact(
             theta0,
             theta1,
             [0., guess_b, guess_c, guess_d, guess_t],

@@ -531,8 +531,8 @@ pub mod solver {
 
     pub type SolveResult<const N: usize> = Result<Solution<N>, SolveError<N>>;
 
-    pub mod analytic;
-    pub mod dual;
+    pub mod ptan_analytic;
+    pub mod ptan_dual;
 }
 
 #[allow(unused_must_use)]

@@ -120,7 +120,7 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
         scale_down * data.p2,
         1e-2,
         11,
-        hb::solver::dual::solve_inferring_full,
+        hb::solver::ptan_dual::solve_inferring_full,
     );
     let params = hb::HyperbezParams::new(
         raw_params[0],
