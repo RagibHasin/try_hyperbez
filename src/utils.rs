@@ -2,7 +2,7 @@ use std::f64;
 
 use xilem_web::svg::kurbo::{CubicBez, ParamCurve, ParamCurveDeriv, Point, Vec2};
 
-use crate::hb::{k_for_tension, quadratic_for_endk, solver};
+use crate::hb::{solver, HyperbezParams};
 
 pub fn norm_radians<D: num_dual::DualNum<f64> + Copy>(theta: D) -> D {
     let mut re = theta.re().rem_euclid(f64::consts::TAU);
@@ -89,8 +89,8 @@ pub fn solve_inferring<R: std::fmt::Debug>(
             let d1 = c1.hypot();
             let tens0 = d0 * 1.5 * (th0.cos() + 1.);
             let tens1 = d1 * 1.5 * (th1.cos() + 1.);
-            let mut k0 = k_for_tension(tens0);
-            let mut k1 = k_for_tension(tens1);
+            let mut k0 = HyperbezParams::<f64>::k_for_tension(tens0);
+            let mut k1 = HyperbezParams::<f64>::k_for_tension(tens1);
             let cbr = (k0 / k1).powf(1. / 3.);
             // tracing::trace!(th0, th1, d0, d1, tens0, tens1, k0, k1, cbr);
             fn soft(x: f64) -> f64 {
@@ -107,7 +107,7 @@ pub fn solve_inferring<R: std::fmt::Debug>(
             k0 += blend * (kmid / ratio - k0);
             k1 += blend * (kmid * ratio - k1);
             // tracing::trace!(dc, kmid, ratio, blend, k0, k1);
-            quadratic_for_endk(k0, k1)
+            HyperbezParams::<f64>::quadratic_for_endk(k0, k1)
         };
 
         let guess_b = make_guess_b(guess_c, guess_d, theta1, theta0);

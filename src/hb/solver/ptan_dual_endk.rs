@@ -249,7 +249,7 @@ pub fn solve_for_cdt_exact(
     Err(SolveError::OutOfIteration { guess, err })
 }
 
-pub fn solve_inferring_full(cb: kurbo::CubicBez, threshold: f64, n_iter: usize) -> [f64; 5] {
+pub fn solve_inferring_full(cb: kurbo::CubicBez, threshold: f64, n_iter: usize) -> [f64; 5]{
     let p0_5 = cb.eval(0.5);
     let phi0_5 = cb.deriv().eval(0.5).to_vec2().atan2();
     let c0 = cb.p1.to_vec2();

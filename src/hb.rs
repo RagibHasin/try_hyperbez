@@ -214,6 +214,31 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
         HyperbezParams::new(a * dt, b * dt, c, d, e)
     }
 
+    pub fn k_for_tension(t: D) -> D {
+        let b = 0.25;
+        (t * t * (t * (1. - b) + b)).recip()
+    }
+
+    /// Returns [k0, k1]
+    pub fn endk_for_quadratic(c: D, d: D) -> [D; 2] {
+        let dis = c * 4. - d.powi(2);
+        let integral = (c * 4. + d * 2.) / (dis * (c + d + 1.).sqrt()) - (d * 2. / dis);
+        let k0 = integral.recip();
+        let k1 = k0 * (c + d + 1.).powf(-1.5);
+
+        [k0, k1]
+    }
+
+    /// Solve quadratic parameters for given k0's normalized to integral
+    /// Returns [c, d]
+    pub fn quadratic_for_endk(k0: D, k1: D) -> [D; 2] {
+        let gamma = (k1 / k0).cbrt();
+        let beta = gamma.powi(-2) - 1.;
+        let d = (gamma * k0 - 1.) * (gamma * 2. + 2.) / gamma;
+
+        [beta - d, d]
+    }
+
     pub fn a(&self) -> D {
         self.a
     }
@@ -378,27 +403,6 @@ pub fn inv_scale_slope(y: f64) -> f64 {
     16. * (1. - 1. * y) / (y * y)
 }
 
-pub fn k_for_tension(t: f64) -> f64 {
-    let b = 0.25;
-    1. / (t * t * (b + (1. - b) * t))
-}
-
-/// Returns [k0, k1]
-pub fn endk_for_quadratic(c: f64, d: f64) -> [f64; 2] {
-    let dis = 4. * c - d * d;
-    //console.log('evaluating', c, d, 'dis', dis);
-    let integral = (4. * c + 2. * d) / (dis * (c + d + 1.).sqrt()) - (2. * d / dis);
-    let k0 = 1. / integral;
-    let k1 = k0 * (c + d + 1.).powf(-1.5);
-    // let gamma = (k1 / k0).cbrt();
-    // let beta = 1. / (gamma * gamma) - 1.;
-    // let inv_k0 = ((-2. * gamma - 2.) * d + 4. * beta * gamma) / (-d * d - 4. * d + 4. * beta);
-    //console.log('kk', inv_k0, 1/k0);
-    //console.log('qu', 1/k0 * d * d + (-2 * gamma - 2 + 4/k0) * d + 4 * beta * (gamma - 1/k0));
-    //console.log('dd', (-2 * gamma - 2) * d + 4 * beta * gamma);
-    [k0, k1]
-}
-
 // pub fn copysign(x, y) {
 //     const a = Math.abs(x);
 //     return y < 0 ? -a : a;
@@ -439,36 +443,6 @@ pub fn solve_quadratic(c0: f64, c1: f64, c2: f64) -> ArrayVec<f64, 2> {
         .collect();
     }
     [root1].into_iter().collect()
-}
-
-/// Solve quadratic parameters for given k0's normalized to integral
-/// Returns [c, d]
-pub fn quadratic_for_endk(k0: f64, k1: f64) -> [f64; 2] {
-    let gamma = (k1 / k0).cbrt();
-    let beta = 1. / (gamma * gamma) - 1.;
-    let d = (gamma * k0 - 1.) * (2. * gamma + 2.) / gamma;
-    /*
-    let c0 = 4 * beta * (gamma - ik0);
-    let c1 = -2 * gamma - 2 + 4 * ik0;
-    let c2 = ik0;
-    let roots = solve_quadratic(c0, c1, c2);
-    let mut best_err = 1e9;
-    let mut best_d = 0;
-    for (var cand_d of roots) {
-        let mut endk = endk_for_quadratic(beta - cand_d, cand_d);
-        let err = Math.pow(endk.k0 - k0, 2) + Math.pow(endk.k1 - k1, 2);
-        if (err < best_err) {
-            best_d = cand_d;
-            best_err = err;
-        }
-    }
-    let d = best_d;
-    let c = beta - d;
-    let wrong_root = 4 * beta * gamma / (2 * gamma + 2);
-    let other_root = c0 / (c2 * wrong_root);
-    console.log('other root', other_root, fast);
-    */
-    [beta - d, d]
 }
 
 /// Returns [a, b]
@@ -533,6 +507,7 @@ pub mod solver {
 
     pub mod ptan_analytic;
     pub mod ptan_dual;
+    pub mod ptan_dual_endk;
 }
 
 #[allow(unused_must_use)]
