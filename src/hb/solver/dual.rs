@@ -296,7 +296,8 @@ pub fn solve_inferring_full(cb: kurbo::CubicBez, threshold: f64, n_iter: usize) 
     tracing::trace!(?guess);
 
     let mut err = f64::INFINITY;
-    for i in 0..n_iter {
+    // for i in 0..n_iter {
+    for i in 0..1 {
         let ab = solve_for_ab_exact(theta0, theta1, guess, threshold, n_iter / 2);
         tracing::trace!(?ab);
 
@@ -342,6 +343,14 @@ pub fn solve_inferring_full(cb: kurbo::CubicBez, threshold: f64, n_iter: usize) 
 
         err = new_err;
     }
+
+    let abcdt = solve_for_params_exact(p0_5, phi0_5, theta0, theta1, guess, 1e-2, 7);
+    tracing::trace!(?abcdt);
+
+    if let Ok(Solution { params, .. }) = abcdt {
+        guess = params.data.0[0];
+    };
+    tracing::trace!(?guess);
 
     guess
 }
