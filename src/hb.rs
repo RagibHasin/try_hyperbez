@@ -43,6 +43,11 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
         }
     }
 
+    pub fn new_with_endk_ln(a: D, b: D, l0: D, l1: D) -> Self {
+        let [c, d, e] = Self::quadratic_for_endk_ln(l0, l1);
+        Self::new(a, b, c, d, e)
+    }
+
     fn int_helper(&self, t: D) -> D {
         (self.num0_e_sqrt + self.num1 * t) / self.q(t).sqrt()
     }
@@ -74,12 +79,14 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
 
     pub fn kappa_extrema(&self) -> ArrayVec<D, 2> {
         fn filter_and_collect<D: DualNum<f64> + Copy, const N: usize>(
-            array: [D; N],
+            res: [D; N],
         ) -> ArrayVec<D, 2> {
-            array
+            let mut res: ArrayVec<D, 2> = res
                 .into_iter()
                 .filter(|t| (0.0..1.).contains(&t.re()))
-                .collect()
+                .collect();
+            res.sort_by(|a, b| a.re().total_cmp(&b.re()));
+            res
         }
 
         let a = self.a;
@@ -147,6 +154,15 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
     pub fn integrate(&self, t: D) -> Vector2<D> {
         let zero = Vector2::new(D::from(0.), D::from(0.));
 
+        // self.integrate_any(
+        //     |u| {
+        //         let (y, x) = self.theta(u).sin_cos();
+        //         Vector2::new(x, y)
+        //     },
+        //     zero,
+        //     t,
+        // )
+
         let integrate_self = |end_t| {
             self.integrate_any(
                 |u| {
@@ -210,7 +226,7 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
         let b = self.b + self.a * t0;
         let c = self.c * dt * dt;
         let d = (self.d + self.c * t0 * 2.) * dt;
-        let e = self.c * t0 * t0 + self.d * t0 + 1.;
+        let e = self.c * t0 * t0 + self.d * t0 + self.e;
         HyperbezParams::new(a * dt, b * dt, c, d, e)
     }
 
@@ -221,12 +237,30 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
 
     /// Returns [k0, k1]
     pub fn endk_for_quadratic(c: D, d: D) -> [D; 2] {
-        let dis = c * 4. - d.powi(2);
-        let integral = (c * 4. + d * 2.) / (dis * (c + d + 1.).sqrt()) - (d * 2. / dis);
-        let k0 = integral.recip();
-        let k1 = k0 * (c + d + 1.).powf(-1.5);
+        // let dis = c * 4. - d.powi(2);
+        // let integral = (c * 4. + d * 2.) / (dis * (c + d + 1.).sqrt()) - (d * 2. / dis);
+        // let k0 = integral.recip();
+        // let k1 = k0 * (c + d + 1.).powf(-1.5);
+
+        let beta = c + d;
+        let gamma = (beta + 1.).sqrt().recip();
+        let k0 = (d * gamma / (gamma * 2. + 2.) + 1.) / gamma;
+        let k1 = gamma.powi(3) * k0;
 
         [k0, k1]
+    }
+
+    /// Solve quadratic parameters for given k0's normalized to integral
+    /// Returns [c, d, e]
+    pub fn quadratic_for_endk_ln(l0: D, l1: D) -> [D; 3] {
+        let e_ln = -(l0 * 2. + l1) / 3. - f64::consts::LN_2;
+        let e = e_ln.exp();
+        let gamma_ln = (l1 - l0) / 3.;
+        let beta = (gamma_ln * -2. + e_ln).exp() - e;
+        let d = (((l0 * 2. + l1) / 3.).exp() - 1.)
+            * ((-gamma_ln + e_ln + f64::consts::LN_2).exp() + e * 2.);
+
+        [beta - d, d, e]
     }
 
     /// Solve quadratic parameters for given k0's normalized to integral
@@ -254,11 +288,14 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
     pub fn e(&self) -> D {
         self.e
     }
+    pub fn num0(&self) -> D {
+        self.num0_e_sqrt
+    }
     pub fn num1(&self) -> D {
         self.num1
     }
-    pub fn num0(&self) -> D {
-        self.num0_e_sqrt
+    pub fn endk(&self) -> [D; 2] {
+        Self::endk_for_quadratic(self.c, self.d)
     }
 }
 
@@ -539,5 +576,41 @@ mod tests {
         let seg0 = hb.subsegment(0.0..0.5);
         let seg1 = hb.subsegment(0.5..1.);
         tracing::trace!(?extrema, ?seg0, ?seg1);
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test3() {
+        let hb = HyperbezParams::new(8.2, -6., 3.4, -3.4, 1.);
+        let extrema = hb.kappa_extrema();
+        let seg0 = hb.subsegment(0.0..0.5);
+        let seg1 = hb.subsegment(0.5..1.);
+        tracing::trace!(?extrema, ?seg0, ?seg1);
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test4() {
+        let hb = HyperbezParams::new(0., -1., -1., 1., 1.1);
+        let extrema = hb.kappa_extrema();
+        tracing::trace!(?extrema);
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn kootikoo() {
+        for l0 in -10..=10 {
+            for l1 in -10..=10 {
+                let l0 = l0 as f64;
+                let l1 = l1 as f64;
+                let [ln_c, ln_d, ln_e] = HyperbezParams::<f64>::quadratic_for_endk_ln(l0, l1);
+                let ln_c_n = ln_c / ln_e;
+                let ln_d_n = ln_d / ln_e;
+                let k0 = l0.exp();
+                let k1 = l1.exp();
+                let [j_c, j_d] = HyperbezParams::<f64>::quadratic_for_endk(k0, k1);
+                tracing::trace!(l0, l1, k0, k1, ln_c, ln_d, ln_e, ln_c_n, ln_d_n, j_c, j_d);
+            }
+        }
     }
 }

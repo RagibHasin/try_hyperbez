@@ -137,6 +137,11 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let frag_theta1 = labeled_valued("θ₁: ", (), format!("{:.1}°", theta1));
     let frag_kappa0 = labeled_valued("κ₀: ", (), format!("{:.3}", kappa0));
     let frag_kappa1 = labeled_valued("κ₁: ", (), format!("{:.3}", kappa1));
+
+    let [k0, k1] = hyperbez.params().endk();
+    let frag_k0 = labeled_valued("k₀: ", (), format!("{k0:.3}"));
+    let frag_k1 = labeled_valued("k₁: ", (), format!("{k1:.3}"));
+
     let frag_n_points = labeled_valued("n: ", (), n_points);
 
     let frag_results = div((
@@ -147,6 +152,10 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
         spacer(),
         frag_kappa0,
         frag_kappa1,
+        spacer(),
+        spacer(),
+        frag_k0,
+        frag_k1,
         spacer(),
         frag_n_points,
     ))

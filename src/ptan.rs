@@ -198,6 +198,10 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let frag_d = labeled_valued("d: ", (), format!("{:.3}", params.d()));
     let frag_e = labeled_valued("e: ", (), format!("{:.3}", params.e()));
 
+    let [k0, k1] = params.endk();
+    let frag_k0 = labeled_valued("k₀: ", (), format!("{k0:.3}"));
+    let frag_k1 = labeled_valued("k₁: ", (), format!("{k1:.3}"));
+
     let frag_arclen = labeled_valued("S / b: ", (), format!("{:.3}", arclen));
     let frag_theta0 = labeled_valued("θ₀: ", (), format!("{:.1}°", theta0));
     let frag_theta1 = labeled_valued("θ₁: ", (), format!("{:.1}°", theta1));
@@ -205,7 +209,17 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let frag_kappa1 = labeled_valued("κ₁: ", (), format!("{:.3}", kappa1));
     let frag_n_points = labeled_valued("n: ", (), n_points);
 
-    let frag_results_1 = div((frag_a, frag_b, frag_c, frag_d, frag_e)).class("results");
+    let frag_results_1 = div((
+        frag_a,
+        frag_b,
+        frag_c,
+        frag_d,
+        frag_e,
+        spacer(),
+        frag_k0,
+        frag_k1,
+    ))
+    .class("results");
     let frag_results_2 = div((
         frag_arclen,
         spacer(),
