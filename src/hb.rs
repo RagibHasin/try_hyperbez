@@ -542,6 +542,7 @@ pub mod solver {
 
     pub type SolveResult<const N: usize> = Result<Solution<N>, SolveError<N>>;
 
+    pub mod coprop_dual;
     pub mod ptan_analytic;
     pub mod ptan_dual;
     pub mod ptan_dual_endk;

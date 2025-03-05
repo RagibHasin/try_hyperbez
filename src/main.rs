@@ -3,7 +3,7 @@
 
 use wasm_bindgen::JsCast;
 use xilem_web::{
-    core::one_of::OneOf3,
+    core::one_of::OneOf4,
     elements::html::{div, option, select},
     interfaces::{Element, HtmlOptionElement},
     App, DomFragment, DomView,
@@ -11,6 +11,7 @@ use xilem_web::{
 
 pub mod components;
 
+mod coprop;
 mod euler_approx;
 mod explorer;
 mod ptan;
@@ -19,11 +20,12 @@ enum AppState {
     Explorer(explorer::AppState),
     EulerApprox(euler_approx::AppState),
     PointTangent(ptan::AppState),
+    Coproportional(coprop::AppState),
 }
 
 fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> {
     let app = match state {
-        AppState::Explorer(state) => OneOf3::A(explorer::app_logic(state).map_state(
+        AppState::Explorer(state) => OneOf4::A(explorer::app_logic(state).map_state(
             |state: &mut AppState| {
                 if let AppState::Explorer(state) = state {
                     state
@@ -32,7 +34,7 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> {
                 }
             },
         )),
-        AppState::EulerApprox(state) => OneOf3::B(euler_approx::app_logic(state).map_state(
+        AppState::EulerApprox(state) => OneOf4::B(euler_approx::app_logic(state).map_state(
             |state: &mut AppState| {
                 if let AppState::EulerApprox(state) = state {
                     state
@@ -42,8 +44,17 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> {
             },
         )),
         AppState::PointTangent(state) => {
-            OneOf3::C(ptan::app_logic(state).map_state(|state: &mut AppState| {
+            OneOf4::C(ptan::app_logic(state).map_state(|state: &mut AppState| {
                 if let AppState::PointTangent(state) = state {
+                    state
+                } else {
+                    unreachable!()
+                }
+            }))
+        }
+        AppState::Coproportional(state) => {
+            OneOf4::D(coprop::app_logic(state).map_state(|state: &mut AppState| {
+                if let AppState::Coproportional(state) = state {
                     state
                 } else {
                     unreachable!()
@@ -62,6 +73,9 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> {
         option("Point · Tangent")
             .value("ptan")
             .selected(matches!(state, AppState::PointTangent(_))),
+        option("Coproportional")
+            .value("coprop")
+            .selected(matches!(state, AppState::Coproportional(_))),
     ))
     .on_change(move |state: &mut AppState, e| {
         match e
@@ -74,6 +88,7 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> {
             "explorer" => *state = AppState::Explorer(explorer::AppState::default()),
             "euler_approx" => *state = AppState::EulerApprox(euler_approx::AppState::default()),
             "ptan" => *state = AppState::PointTangent(ptan::AppState::default()),
+            "coprop" => *state = AppState::Coproportional(coprop::AppState::default()),
             _ => {}
         }
     }))

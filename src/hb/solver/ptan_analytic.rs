@@ -33,6 +33,7 @@ impl HyperbezParams<f64> {
         let mut k0 = Self::k_for_tension(tens0);
         let mut k1 = Self::k_for_tension(tens1);
         let cbr = (k0 / k1).powf(1. / 3.);
+        tracing::trace!(th0, th1, d0, d1, tens0, tens1, k0, k1, cbr);
         fn soft(x: f64) -> f64 {
             (0.5 * (1. + x * x)).sqrt()
         }
@@ -45,6 +46,7 @@ impl HyperbezParams<f64> {
         let blend = 0.5 + 0.5 * (3. - 10. * dc).tanh();
         k0 += blend * (kmid / ratio - k0);
         k1 += blend * (kmid * ratio - k1);
+        tracing::trace!(dc, kmid, ratio, blend, k0, k1);
         let [c, d] = Self::quadratic_for_endk(k0, k1);
         //console.log('dc', dc, 'c', cd.c, 'd', cd.d);
         // let endk = endk_for_quadratic(c, d);
