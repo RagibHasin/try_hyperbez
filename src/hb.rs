@@ -49,7 +49,11 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
     }
 
     fn int_helper(&self, t: D) -> D {
-        (self.num0_e_sqrt + self.num1 * t) / self.q(t).sqrt()
+        if self.c.is_zero() && self.d.is_zero() {
+            self.a * t.powi(2) * 0.5 + self.b * t
+        } else {
+            (self.num0_e_sqrt + self.num1 * t) / self.q(t).sqrt()
+        }
     }
 
     /// Determine the angle for the given parameter.
@@ -58,7 +62,11 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
     /// curve. The `t` parameter ranges from 0 to 1, and the returned
     /// value is 0 for `t = 0`.
     pub fn theta(&self, t: D) -> D {
-        self.int_helper(t) - self.num0_e_sqrt / self.e.sqrt()
+        if self.c.is_zero() && self.d.is_zero() {
+            self.int_helper(t)
+        } else {
+            self.int_helper(t) - self.num0_e_sqrt / self.e.sqrt()
+        }
     }
 
     pub fn kappa(&self, t: D) -> D {
