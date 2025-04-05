@@ -253,18 +253,35 @@ fn arm_limit_from_theta_anti(theta: f64, anti_theta: f64) -> f64 {
     let coeff_anti = anti_theta.cos().powi(430);
     let term_tan_p = (0.5 * theta - f64::consts::FRAC_PI_4).tan().powi(10);
     let coeff_small = term_tan_p * (1. - 0.4 * anti_theta.sin());
-    let term_sin = theta.sin();
-    let normally = term_sin / anti_theta.sin();
-    let mitigate_anti = term_sin / (anti_theta * 89. / 90. + 1f64.to_radians()).sin();
+    let theta_sin = theta.sin();
+    let normally = theta_sin / anti_theta.sin();
+    let mitigate_anti = theta_sin / (anti_theta * 89. / 90. + 1f64.to_radians()).sin();
+    let extreme_anti = (1. - coeff_anti) * normally + coeff_anti * mitigate_anti;
+    let coeff_small = 10. / (10. + 100f64.powf(extreme_anti));
 
     if anti_theta.abs() < 0.001 {
-        let sin_1deg = 1f64.to_radians().sin();
+        let ang_1deg = 1f64.to_radians();
+        let sin_1deg = ang_1deg.sin();
+        let limit = theta_sin / sin_1deg;
+        let raised_limit = 100f64.powf(limit);
+        let denom = 10. + raised_limit;
+
+        let del1_com_num = theta_sin * (89. / ang_1deg.tan() / sin_1deg - 19350.);
+        let del1_1_num = -raised_limit / 90. * del1_com_num;
+        let del1_2_num =
+            (2. * limit - 1.).exp2() / 4.5 * 25f64.powf(limit) * f64::consts::LN_10 * del1_com_num;
+        let del1_3_num = raised_limit.powi(2) / 45. * f64::consts::LN_10 * limit * del1_com_num;
+        let del1_4_num = -raised_limit / 45. * f64::consts::LN_10 * limit * del1_com_num;
+
+        let del1_num_plain = del1_1_num + del1_4_num;
+        let del1_num_plain = del1_2_num + del1_3_num;
+
         let terms = [
-            term_sin / sin_1deg + term_tan_p,
-            3031.165891512835 * term_sin + 0.2 * term_tan_p,
-            ((15842. * 1f64.to_radians().tan().powi(-2) - 3475079.) * term_sin)
+            (5. + raised_limit * limit) / denom,
+            3031.165891512835 * theta_sin + 0.2 * term_tan_p,
+            ((15842. * 1f64.to_radians().tan().powi(-2) - 3475079.) * theta_sin)
                 / (16200. * sin_1deg),
-            9746682.059356252 * term_sin + term_tan_p / 30.,
+            9746682.059356252 * theta_sin + term_tan_p / 30.,
         ];
 
         terms
@@ -273,7 +290,7 @@ fn arm_limit_from_theta_anti(theta: f64, anti_theta: f64) -> f64 {
             .map(|(i, c)| c * anti_theta.powi(i as i32))
             .sum()
     } else {
-        (1. - coeff_anti) * normally + coeff_anti * mitigate_anti + 0.5 * coeff_small
+        (1. - coeff_small) * extreme_anti + 0.5 * coeff_small
     }
     .abs()
 }
