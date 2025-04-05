@@ -250,45 +250,86 @@ pub fn solve_for_cdt_exact(
 }
 
 fn arm_limit_from_theta_anti(theta: f64, anti_theta: f64) -> f64 {
-    let coeff_anti = anti_theta.cos().powi(430);
-    let term_tan_p = (0.5 * theta - f64::consts::FRAC_PI_4).tan().powi(10);
-    let coeff_small = term_tan_p * (1. - 0.4 * anti_theta.sin());
+    let coeff_anti = (anti_theta * f64::consts::FRAC_2_PI - 1.).abs().powi(25);
+    // let term_tan_p = (0.5 * theta - f64::consts::FRAC_PI_4).tan().powi(10);
+    // let coeff_small = term_tan_p * (1. - 0.4 * anti_theta.sin());
     let theta_sin = theta.sin();
     let normally = theta_sin / anti_theta.sin();
-    let mitigate_anti = theta_sin / (anti_theta * 89. / 90. + 1f64.to_radians()).sin();
+    let mitigate_anti = theta_sin / (anti_theta * 0.9 + 9f64.to_radians()).sin();
     let extreme_anti = (1. - coeff_anti) * normally + coeff_anti * mitigate_anti;
     let coeff_small = 10. / (10. + 100f64.powf(extreme_anti));
 
-    if anti_theta.abs() < 0.001 {
-        let ang_1deg = 1f64.to_radians();
-        let sin_1deg = ang_1deg.sin();
-        let limit = theta_sin / sin_1deg;
-        let raised_limit = 100f64.powf(limit);
-        let denom = 10. + raised_limit;
+    if anti_theta.abs() < 0.001
+    // || anti_theta - f64::consts::PI < 0.001
+    {
+        if theta.abs() < 0.001 {
+            let terms = [
+                [
+                    5. / 11.,
+                    -5.69475608565833,
+                    145.029874613897 / 2.,
+                    426571.864310941 / 6.,
+                ],
+                [
+                    0.,
+                    322.627331447856,
+                    -16432.8728827338 / 2.,
+                    -7.24996024381052e7 / 6.,
+                ],
+                [
+                    0.,
+                    -36561.4436230444 / 2.,
+                    2.79321833202726e6 / 4.,
+                    1.64306126609465e10 / 12.,
+                ],
+                [
+                    0.,
+                    6.21462197890865e6 / 6.,
+                    -6.33045613354169e8 / 12.,
+                    -4.65467213153057e12 / 36.,
+                ],
+            ];
 
-        let del1_com_num = theta_sin * (89. / ang_1deg.tan() / sin_1deg - 19350.);
-        let del1_1_num = -raised_limit / 90. * del1_com_num;
-        let del1_2_num =
-            (2. * limit - 1.).exp2() / 4.5 * 25f64.powf(limit) * f64::consts::LN_10 * del1_com_num;
-        let del1_3_num = raised_limit.powi(2) / 45. * f64::consts::LN_10 * limit * del1_com_num;
-        let del1_4_num = -raised_limit / 45. * f64::consts::LN_10 * limit * del1_com_num;
+            let thetas = [0, 1, 2, 3].map(|i| theta.powi(i));
 
-        let del1_num_plain = del1_1_num + del1_4_num;
-        let del1_num_plain = del1_2_num + del1_3_num;
+            terms
+                .into_iter()
+                .enumerate()
+                .flat_map(|(i, c)| {
+                    c.into_iter()
+                        .zip(thetas)
+                        .map(move |(c, theta)| c * theta * anti_theta.powi(i as i32))
+                })
+                .sum()
+        } else {
+            let ang_1deg = 1f64.to_radians();
+            let sin_1deg = ang_1deg.sin();
+            let tan_1deg = ang_1deg.tan();
+            let limit = theta_sin / sin_1deg;
+            // let raised_limit = 100f64.powf(limit);
+            // let denom = 10. + raised_limit;
 
-        let terms = [
-            (5. + raised_limit * limit) / denom,
-            3031.165891512835 * theta_sin + 0.2 * term_tan_p,
-            ((15842. * 1f64.to_radians().tan().powi(-2) - 3475079.) * theta_sin)
-                / (16200. * sin_1deg),
-            9746682.059356252 * theta_sin + term_tan_p / 30.,
-        ];
+            // let del1_com_num = theta_sin * (89. / ang_1deg.tan() / sin_1deg - 19350.);
+            // let del1_num_plain = -raised_limit * (1. + 2. * f64::consts::LN_10 * limit);
+            // let del1_num_squared = (10. * (2. * limit).exp2() * 25f64.powf(limit)
+            //     + 2. * raised_limit.powi(2) * limit)
+            //     * f64::consts::LN_10
+            //     / denom;
+            // let del1 = (del1_num_plain + del1_num_squared) * del1_com_num / denom;
 
-        terms
-            .into_iter()
-            .enumerate()
-            .map(|(i, c)| c * anti_theta.powi(i as i32))
-            .sum()
+            let terms = [
+                1.,
+                -89. / (90. * tan_1deg),
+                7921. / 2. / 8100. * (tan_1deg.powi(-2) + sin_1deg.powi(-2)),
+                -704969. / 6. / (729000. * tan_1deg) * (tan_1deg.powi(-2) + 5. * sin_1deg.powi(-2)),
+            ];
+
+            terms
+                .into_iter()
+                .enumerate()
+                .map(|(i, c)| c * limit * anti_theta.powi(i as i32))
+                .sum()
+        }
     } else {
         (1. - coeff_small) * extreme_anti + 0.5 * coeff_small
     }
