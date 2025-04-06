@@ -250,86 +250,127 @@ pub fn solve_for_cdt_exact(
 }
 
 fn arm_limit_from_theta_anti(theta: f64, anti_theta: f64) -> f64 {
-    let coeff_anti = (anti_theta * f64::consts::FRAC_2_PI - 1.).abs().powi(25);
+    let coeff_anti = (anti_theta * f64::consts::FRAC_2_PI - 1.).abs().powi(44);
     // let term_tan_p = (0.5 * theta - f64::consts::FRAC_PI_4).tan().powi(10);
     // let coeff_small = term_tan_p * (1. - 0.4 * anti_theta.sin());
     let theta_sin = theta.sin();
     let normally = theta_sin / anti_theta.sin();
-    let mitigate_anti = theta_sin / (anti_theta * 0.9 + 9f64.to_radians()).sin();
+
+    let ang_3deg = 3f64.to_radians();
+    let mitigate_anti = theta_sin / (anti_theta * 29. / 30. + ang_3deg).sin();
     let extreme_anti = (1. - coeff_anti) * normally + coeff_anti * mitigate_anti;
     let coeff_small = 10. / (10. + 100f64.powf(extreme_anti));
 
     if anti_theta.abs() < 0.001
     // || anti_theta - f64::consts::PI < 0.001
     {
-        if theta.abs() < 0.001 {
-            let terms = [
-                [
-                    5. / 11.,
-                    -5.69475608565833,
-                    145.029874613897 / 2.,
-                    426571.864310941 / 6.,
-                ],
-                [
-                    0.,
-                    322.627331447856,
-                    -16432.8728827338 / 2.,
-                    -7.24996024381052e7 / 6.,
-                ],
-                [
-                    0.,
-                    -36561.4436230444 / 2.,
-                    2.79321833202726e6 / 4.,
-                    1.64306126609465e10 / 12.,
-                ],
-                [
-                    0.,
-                    6.21462197890865e6 / 6.,
-                    -6.33045613354169e8 / 12.,
-                    -4.65467213153057e12 / 36.,
-                ],
-            ];
+        let sin_3deg = ang_3deg.sin();
+        let limit = theta_sin / sin_3deg;
+        let raised_limit = 100f64.powf(limit);
+        let limit_raised = limit * raised_limit;
+        let limit_raised_p_5 = 5. + limit_raised;
+        let denom = 10. + raised_limit;
+        let limit_pow_2 = limit.powi(2);
+        let limit_pow_3 = limit.powi(3);
+        let denom_pow_2 = denom.powi(2);
+        let denom_pow_3 = denom.powi(3);
+        let denom_pow_4 = denom.powi(4);
+        let raised_limit_pow_3 = raised_limit.powi(3);
+        let limit_raised_pow_2 = limit_raised.powi(2);
+        // let terms = [
+        //     limit_raised_p_5 / denom,
+        //     -((5.682376363207538 * limit_raised * (1. + 4.605170185988091 * limit)) / denom)
+        //         + (26.168310213406796 * limit_raised * limit_raised_p_5) / denom_pow_2,
+        //     (0.405
+        //         * limit_raised
+        //         * (80.7269163781228 + 738.9172068365816 * limit + 845.407974598877 * limit_pow_2))
+        //         / denom
+        //         + (684.7804594250904 * limit_raised.powi(2) * limit_raised_p_5) / denom_pow_3
+        //         - (1.865093925325177
+        //             * limit_raised
+        //             * (403.634581890614
+        //                 + 917.890045813241 * limit
+        //                 + 160.4538327562456 * limit_raised
+        //                 + 550.7340274879451 * limit * limit_raised))
+        //             / denom_pow_2,
+        //     -((3.9184011382349595
+        //         * limit_raised
+        //         * (47.804226065180614
+        //             + 656.8335007675184 * limit
+        //             + 1502.035292895382 * limit_pow_2
+        //             + 762.1964018036038 * limit_pow_3))
+        //         / denom)
+        //         - 166.19970872723469
+        //             * limit_raised.powi(2)
+        //             * (237.06339097770921
+        //                 + 539.0968380012138 * limit
+        //                 + 70.82535639108368 * limit_raised
+        //                 + 215.6387352004855 * limit * limit_raised)
+        //             / denom_pow_3
+        //         + (17919.54749031499
+        //             * limit_pow_3
+        //             * (5. * raised_limit.powi(3) + limit * raised_limit.powi(4)))
+        //             / denom_pow_4
+        //         + 18.044904098541437
+        //             * limit_raised
+        //             * (239.02113032590307
+        //                 + 1158.5619200043661 * limit_pow_2 * limit_raised
+        //                 + limit * (1091.7172603197848 + 142.6295824562643 * raised_limit)
+        //                 + 4. * limit_pow_2
+        //                     * (206.8860571436368 + 244.62211474814978 * raised_limit))
+        //             / denom_pow_2,
+        // ];
+        let terms = [
+            limit_raised_p_5 / denom,
+            -((18.44509879813727 * limit_raised * (1. + 4.605170185988091 * limit)) / denom)
+                + (84.94281906278654 * limit_raised * limit_raised_p_5) / denom_pow_2,
+            (85.28902852937236
+                * limit_raised
+                * (3.9945218953682733
+                    + 36.765678675527478 * limit
+                    + 42.29900747344337 * limit_pow_2))
+                / denom
+                + (7215.282510333292 * limit_raised_pow_2 * limit_raised_p_5) / denom_pow_3
+                - (392.77049137535333
+                    * limit_raised
+                    * (19.972609476841367
+                        + 45.925563839252159 * limit
+                        + 7.98356568610482 * limit_raised
+                        + 27.555338303551296 * limit * limit_raised))
+                    / denom_pow_2,
+            -((524.3881858738072
+                * limit_raised
+                * (11.994521895368273
+                    + 165.60953346669103 * limit
+                    + 381.03959949214175 * limit_pow_2
+                    + 194.79412811358885 * limit_pow_3))
+                / denom)
+                - 22242.021854732265
+                    * limit_raised_pow_2
+                    * (59.9178284305241
+                        + 137.7766915177565 * limit
+                        + 17.96713137220964 * limit_raised
+                        + 55.11067660710259 * limit * limit_raised)
+                    / denom_pow_3
+                + (612886.436762129
+                    * limit_pow_3
+                    * (5. * raised_limit_pow_3 + limit_raised * raised_limit_pow_3))
+                    / denom_pow_4
+                + 2414.8968394704383
+                    * limit_raised
+                    * (59.97260947684137
+                        + 296.09305231410356 * limit_pow_2 * limit_raised
+                        + limit * (275.9317970973992 + 35.961653267577913 * raised_limit)
+                        + 4. * limit_pow_2
+                            * (52.87375934180421 + 62.05627329227335 * raised_limit))
+                    / denom_pow_2,
+        ];
 
-            let thetas = [0, 1, 2, 3].map(|i| theta.powi(i));
-
-            terms
-                .into_iter()
-                .enumerate()
-                .flat_map(|(i, c)| {
-                    c.into_iter()
-                        .zip(thetas)
-                        .map(move |(c, theta)| c * theta * anti_theta.powi(i as i32))
-                })
-                .sum()
-        } else {
-            let ang_1deg = 1f64.to_radians();
-            let sin_1deg = ang_1deg.sin();
-            let tan_1deg = ang_1deg.tan();
-            let limit = theta_sin / sin_1deg;
-            // let raised_limit = 100f64.powf(limit);
-            // let denom = 10. + raised_limit;
-
-            // let del1_com_num = theta_sin * (89. / ang_1deg.tan() / sin_1deg - 19350.);
-            // let del1_num_plain = -raised_limit * (1. + 2. * f64::consts::LN_10 * limit);
-            // let del1_num_squared = (10. * (2. * limit).exp2() * 25f64.powf(limit)
-            //     + 2. * raised_limit.powi(2) * limit)
-            //     * f64::consts::LN_10
-            //     / denom;
-            // let del1 = (del1_num_plain + del1_num_squared) * del1_com_num / denom;
-
-            let terms = [
-                1.,
-                -89. / (90. * tan_1deg),
-                7921. / 2. / 8100. * (tan_1deg.powi(-2) + sin_1deg.powi(-2)),
-                -704969. / 6. / (729000. * tan_1deg) * (tan_1deg.powi(-2) + 5. * sin_1deg.powi(-2)),
-            ];
-
-            terms
-                .into_iter()
-                .enumerate()
-                .map(|(i, c)| c * limit * anti_theta.powi(i as i32))
-                .sum()
-        }
+        terms
+            .into_iter()
+            .enumerate()
+            .map(|(i, c)| c * anti_theta.powi(i as i32))
+            .sum()
     } else {
         (1. - coeff_small) * extreme_anti + 0.5 * coeff_small
     }
@@ -451,11 +492,11 @@ pub fn make_hyperbez(cb: kurbo::CubicBez) -> HyperbezParams<f64> {
         _ => todo!(),
     }
 
-    // let lim = arm_limits_from_thetas(theta0, theta1);
-    // let (k0, kappa0) = kappa_from_arm_limit(c0, lim[0]);
-    // let (k1, kappa1) = kappa_from_arm_limit(c1, lim[1]);
+    // let limit = arm_limits_from_thetas(theta0, theta1);
+    // let (k0, kappa0) = kappa_from_arm_limit(c0, limit[0]);
+    // let (k1, kappa1) = kappa_from_arm_limit(c1, limit[1]);
 
-    // tracing::trace!(a0, a1, ?lim, k0, k1, kappa0, kappa1);
+    // tracing::trace!(a0, a1, ?limit, k0, k1, kappa0, kappa1);
 
     // // we know, s_critical = -d / (2 c) ; extrema of curvature denominator
     // // approximating: s_critical = abs area under control arm 0 / abs area under control arm 0 and 1
