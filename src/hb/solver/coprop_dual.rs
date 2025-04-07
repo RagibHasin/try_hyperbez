@@ -249,141 +249,45 @@ pub fn solve_for_cdt_exact(
     Err(SolveError::OutOfIteration { guess, err })
 }
 
-fn arm_limit_from_theta_anti(theta: f64, anti_theta: f64) -> f64 {
-    let coeff_anti = (anti_theta * f64::consts::FRAC_2_PI - 1.).abs().powi(44);
-    // let term_tan_p = (0.5 * theta - f64::consts::FRAC_PI_4).tan().powi(10);
-    // let coeff_small = term_tan_p * (1. - 0.4 * anti_theta.sin());
-    let theta_sin = theta.sin();
-    let normally = theta_sin / anti_theta.sin();
-
-    let ang_3deg = 3f64.to_radians();
-    let mitigate_anti = theta_sin / (anti_theta * 29. / 30. + ang_3deg).sin();
-    let extreme_anti = (1. - coeff_anti) * normally + coeff_anti * mitigate_anti;
-    let coeff_small = 10. / (10. + 100f64.powf(extreme_anti));
-
-    if anti_theta.abs() < 0.001
-    // || anti_theta - f64::consts::PI < 0.001
-    {
-        let sin_3deg = ang_3deg.sin();
-        let limit = theta_sin / sin_3deg;
-        let raised_limit = 100f64.powf(limit);
-        let limit_raised = limit * raised_limit;
-        let limit_raised_p_5 = 5. + limit_raised;
-        let denom = 10. + raised_limit;
-        let limit_pow_2 = limit.powi(2);
-        let limit_pow_3 = limit.powi(3);
-        let denom_pow_2 = denom.powi(2);
-        let denom_pow_3 = denom.powi(3);
-        let denom_pow_4 = denom.powi(4);
-        let raised_limit_pow_3 = raised_limit.powi(3);
-        let limit_raised_pow_2 = limit_raised.powi(2);
-        // let terms = [
-        //     limit_raised_p_5 / denom,
-        //     -((5.682376363207538 * limit_raised * (1. + 4.605170185988091 * limit)) / denom)
-        //         + (26.168310213406796 * limit_raised * limit_raised_p_5) / denom_pow_2,
-        //     (0.405
-        //         * limit_raised
-        //         * (80.7269163781228 + 738.9172068365816 * limit + 845.407974598877 * limit_pow_2))
-        //         / denom
-        //         + (684.7804594250904 * limit_raised.powi(2) * limit_raised_p_5) / denom_pow_3
-        //         - (1.865093925325177
-        //             * limit_raised
-        //             * (403.634581890614
-        //                 + 917.890045813241 * limit
-        //                 + 160.4538327562456 * limit_raised
-        //                 + 550.7340274879451 * limit * limit_raised))
-        //             / denom_pow_2,
-        //     -((3.9184011382349595
-        //         * limit_raised
-        //         * (47.804226065180614
-        //             + 656.8335007675184 * limit
-        //             + 1502.035292895382 * limit_pow_2
-        //             + 762.1964018036038 * limit_pow_3))
-        //         / denom)
-        //         - 166.19970872723469
-        //             * limit_raised.powi(2)
-        //             * (237.06339097770921
-        //                 + 539.0968380012138 * limit
-        //                 + 70.82535639108368 * limit_raised
-        //                 + 215.6387352004855 * limit * limit_raised)
-        //             / denom_pow_3
-        //         + (17919.54749031499
-        //             * limit_pow_3
-        //             * (5. * raised_limit.powi(3) + limit * raised_limit.powi(4)))
-        //             / denom_pow_4
-        //         + 18.044904098541437
-        //             * limit_raised
-        //             * (239.02113032590307
-        //                 + 1158.5619200043661 * limit_pow_2 * limit_raised
-        //                 + limit * (1091.7172603197848 + 142.6295824562643 * raised_limit)
-        //                 + 4. * limit_pow_2
-        //                     * (206.8860571436368 + 244.62211474814978 * raised_limit))
-        //             / denom_pow_2,
-        // ];
-        let terms = [
-            limit_raised_p_5 / denom,
-            -((18.44509879813727 * limit_raised * (1. + 4.605170185988091 * limit)) / denom)
-                + (84.94281906278654 * limit_raised * limit_raised_p_5) / denom_pow_2,
-            (85.28902852937236
-                * limit_raised
-                * (3.9945218953682733
-                    + 36.765678675527478 * limit
-                    + 42.29900747344337 * limit_pow_2))
-                / denom
-                + (7215.282510333292 * limit_raised_pow_2 * limit_raised_p_5) / denom_pow_3
-                - (392.77049137535333
-                    * limit_raised
-                    * (19.972609476841367
-                        + 45.925563839252159 * limit
-                        + 7.98356568610482 * limit_raised
-                        + 27.555338303551296 * limit * limit_raised))
-                    / denom_pow_2,
-            -((524.3881858738072
-                * limit_raised
-                * (11.994521895368273
-                    + 165.60953346669103 * limit
-                    + 381.03959949214175 * limit_pow_2
-                    + 194.79412811358885 * limit_pow_3))
-                / denom)
-                - 22242.021854732265
-                    * limit_raised_pow_2
-                    * (59.9178284305241
-                        + 137.7766915177565 * limit
-                        + 17.96713137220964 * limit_raised
-                        + 55.11067660710259 * limit * limit_raised)
-                    / denom_pow_3
-                + (612886.436762129
-                    * limit_pow_3
-                    * (5. * raised_limit_pow_3 + limit_raised * raised_limit_pow_3))
-                    / denom_pow_4
-                + 2414.8968394704383
-                    * limit_raised
-                    * (59.97260947684137
-                        + 296.09305231410356 * limit_pow_2 * limit_raised
-                        + limit * (275.9317970973992 + 35.961653267577913 * raised_limit)
-                        + 4. * limit_pow_2
-                            * (52.87375934180421 + 62.05627329227335 * raised_limit))
-                    / denom_pow_2,
-        ];
-
-        terms
-            .into_iter()
-            .enumerate()
-            .map(|(i, c)| c * anti_theta.powi(i as i32))
-            .sum()
-    } else {
-        (1. - coeff_small) * extreme_anti + 0.5 * coeff_small
+#[tracing::instrument(ret(level = tracing::Level::TRACE))]
+fn arm_limit_from_thetas(a: f64, b: f64) -> f64 {
+    fn f_normally(a: f64, b: f64) -> f64 {
+        a.sin() / (a + b).sin()
     }
-    .abs()
+
+    fn f_regular(a: f64, b: f64) -> f64 {
+        let normally = f_normally(a, b);
+        let coeff_ab_max = ((a + b) * f64::consts::FRAC_1_PI).powi(36);
+        let ang_3deg = 3f64.to_radians();
+        // mtor = mitigator
+        let mted_a = a * 14. / 15. + ang_3deg;
+        let mted_b = b * 14. / 15. + ang_3deg;
+        let mtor_ab_max = f_normally(mted_a, mted_b);
+        let mted_ab_max = (1. - coeff_ab_max) * normally + coeff_ab_max * mtor_ab_max;
+
+        mted_ab_max + (-20. * mted_ab_max - 1.).exp2()
+    }
+
+    let a = a.abs();
+    let b = b.abs();
+
+    let ab = a + b;
+    use f64::consts::PI;
+    if ab == 0. {
+        0.5
+    } else if ab <= PI {
+        f_regular(a, b)
+    } else {
+        f_regular(a * PI / ab, b * PI / ab).powi(2) / f_regular(PI - a, PI - b)
+    }
 }
 
 fn arm_limits_from_thetas(theta0: f64, theta1: f64) -> [f64; 2] {
     let inner_theta1 = -theta1;
-    let anti_theta = f64::consts::PI - theta0 - inner_theta1;
 
     [
-        arm_limit_from_theta_anti(inner_theta1, anti_theta),
-        arm_limit_from_theta_anti(theta0, anti_theta),
+        arm_limit_from_thetas(inner_theta1, theta0),
+        arm_limit_from_thetas(theta0, inner_theta1),
     ]
 }
 
@@ -408,7 +312,7 @@ fn kappa_from_k(k: f64) -> f64 {
 }
 
 /// (k, κ)
-#[tracing::instrument(level = tracing::Level::TRACE, ret(level = tracing::Level::TRACE))]
+#[tracing::instrument(ret(level = tracing::Level::TRACE))]
 fn kappa_from_arm_limit(arm: Vec2, limit: f64) -> (f64, f64) {
     let theta = arm.angle().abs();
     let k_circle = 0.5 * theta.sin() / limit - 1.;
@@ -439,58 +343,49 @@ pub fn make_hyperbez(cb: kurbo::CubicBez) -> HyperbezParams<f64> {
     tracing::trace!(a0, a1);
 
     let inner_theta1 = -theta1;
-    match (theta0.is_sign_positive(), theta1.is_sign_negative()) {
-        (true, true) | (false, false) => {
-            // concave/convex shape
+    let lim0 = arm_limit_from_thetas(inner_theta1, theta0);
+    let lim1 = arm_limit_from_thetas(theta0, inner_theta1);
+    let (k0, curv0) = kappa_from_arm_limit(c0, lim0);
+    let (k1, curv1) = kappa_from_arm_limit(c1, lim1);
 
-            let anti_theta = norm_radians(f64::consts::PI - theta0 - inner_theta1);
-            let lim0 = arm_limit_from_theta_anti(inner_theta1, anti_theta);
-            let lim1 = arm_limit_from_theta_anti(theta0, anti_theta);
-            let (k0, curv0) = kappa_from_arm_limit(c0, lim0);
-            let (k1, curv1) = kappa_from_arm_limit(c1, lim1);
+    // both handle on the same side of base
+    let same_sided = theta0.is_sign_positive() == theta1.is_sign_negative();
+    let loopy = same_sided && k0 > 0. && k1 > 0.;
+    let kappa_sign = theta0.signum() * if loopy { 1. } else { -1. };
+    let kappa0 = curv0.copysign(kappa_sign);
+    let kappa1 = curv1.copysign(kappa_sign);
 
-            let (kappa0, kappa1, loopy) = if k0 <= 0. && k1 <= 0. {
-                (-curv0, -curv1, false)
-            } else {
-                (curv0, curv1, true)
-            };
+    tracing::trace!(theta0, theta1, lim0, lim1, k0, k1, kappa0, kappa1, same_sided, loopy);
 
-            tracing::trace!(theta0, theta1, anti_theta, lim0, lim1, k0, k1, kappa0, kappa1, loopy);
-
-            // we know, s_critical = -d / (2 c) ; extrema of curvature denominator
-            // approximating: s_critical = abs area under control arm 0 / abs area under control arm 0 and 1
-            // and assume: d = m c => s_critical = -m / 2
-            // therefore: m = -2 s_critical
-            let m = -2. * a0 / (a0 + a1);
-            let guess_c = {
-                let traversed_theta =
-                    theta1 - theta0 + f64::from(loopy) * f64::consts::TAU.copysign(kappa0);
-                if (m + 1.).abs() < 1e-6 {
-                    [4. - 2. * (kappa0 + kappa1) / traversed_theta, f64::NAN]
-                } else {
-                    let a = (traversed_theta * m - 2. * (m + 1.) * kappa1).powi(2);
-                    let b = -4.
-                        * (traversed_theta.powi(2)
-                            + kappa0 * traversed_theta * m
-                            + kappa1 * traversed_theta * (2. + 3. * m)
-                            - 2. * (1. + m) * kappa1 * (kappa0 + kappa1));
-                    let c = 4. * (kappa0 + kappa1) * (kappa0 + kappa1 - 2. * traversed_theta);
-                    let det = (b.powi(2) - 4. * a * c).sqrt();
-                    [-b + det, -b - det].map(|x| x * 0.5 / a)
-                }
-            };
-            let guess_a = guess_c.map(|c| -kappa0 + kappa1 * (c * (m + 1.) + 1.).powf(1.5));
-            let guess_d = guess_c.map(|c| m * c);
-
-            tracing::trace!(m, ?guess_a, ?guess_c, ?guess_d);
-
-            // let [c, d] = HyperbezParams::quadratic_for_endk(kappa0, kappa1);
-            // let [a, b] = solve_thetas(-theta0, theta1, c, d, 1.);
-            let [a, b, c, d] = [guess_a[0], kappa0, guess_c[0], guess_d[0]];
-            HyperbezParams::new(a, b, c, d, 1.)
+    // we know, s_critical = -d / (2 c) ; extrema of curvature denominator
+    // approximating: s_critical = abs area under control arm 0 / abs area under control arm 0 and 1
+    // and assume: d = m c => s_critical = -m / 2
+    // therefore: m = -2 s_critical
+    let m = -2. * a0 / (a0 + a1);
+    let guess_c = {
+        let traversed_theta =
+            theta1 - theta0 + f64::from(loopy) * f64::consts::TAU.copysign(kappa0);
+        if (m + 1.).abs() < 1e-6 {
+            [4. - 2. * (kappa0 + kappa1) / traversed_theta, f64::NAN]
+        } else {
+            let a = (traversed_theta * m - 2. * (m + 1.) * kappa1).powi(2);
+            let b = -4.
+                * (traversed_theta.powi(2)
+                    + kappa0 * traversed_theta * m
+                    + kappa1 * traversed_theta * (2. + 3. * m)
+                    - 2. * (1. + m) * kappa1 * (kappa0 + kappa1));
+            let c = 4. * (kappa0 + kappa1) * (kappa0 + kappa1 - 2. * traversed_theta);
+            let det = (b.powi(2) - 4. * a * c).sqrt();
+            [-b + det, -b - det].map(|x| x * 0.5 / a)
         }
-        _ => todo!(),
-    }
+    };
+    let guess_a = guess_c.map(|c| -kappa0 + kappa1 * (c * (m + 1.) + 1.).powf(1.5));
+    let guess_d = guess_c.map(|c| m * c);
+
+    tracing::trace!(m, ?guess_a, ?guess_c, ?guess_d);
+
+    let [a, b, c, d] = [guess_a[0], kappa0, guess_c[0], guess_d[0]];
+    HyperbezParams::new(a, b, c, d, 1.)
 
     // let limit = arm_limits_from_thetas(theta0, theta1);
     // let (k0, kappa0) = kappa_from_arm_limit(c0, limit[0]);
@@ -751,6 +646,45 @@ mod tests {
             Point::ZERO,
             Point::new(-0.25, 0.02),
             Point::new(1.25, 0.02),
+            Point::new(1., 0.),
+        ));
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test11() {
+        let arm = arm_limit_from_thetas(f64::consts::FRAC_PI_2, f64::consts::FRAC_PI_2);
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test12() {
+        let hb = make_hyperbez(kurbo::CubicBez::new(
+            Point::ZERO,
+            Point::new(0.1, -0.1),
+            Point::new(0.9, -0.1),
+            Point::new(1., 0.),
+        ));
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test13() {
+        let hb = make_hyperbez(kurbo::CubicBez::new(
+            Point::ZERO,
+            Point::new(0.1, 0.1),
+            Point::new(0.9, 0.1),
+            Point::new(1., 0.),
+        ));
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test14() {
+        let hb = make_hyperbez(kurbo::CubicBez::new(
+            Point::ZERO,
+            Point::new(0.2, 0.5),
+            Point::new(0.8, -0.5),
             Point::new(1., 0.),
         ));
     }
