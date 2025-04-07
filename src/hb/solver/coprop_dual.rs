@@ -2,7 +2,7 @@ use std::f64;
 
 use xilem_web::svg::kurbo;
 
-use kurbo::{Affine, ParamCurve, ParamCurveDeriv, Point};
+use kurbo::{Affine, Point};
 use nalgebra::{Vector2, Vector3, Vector5};
 use num_dual::{jacobian, DualNum, DualVec64};
 
@@ -282,31 +282,6 @@ fn arm_limit_from_thetas(a: f64, b: f64) -> f64 {
     }
 }
 
-fn arm_limits_from_thetas(theta0: f64, theta1: f64) -> [f64; 2] {
-    let inner_theta1 = -theta1;
-
-    [
-        arm_limit_from_thetas(inner_theta1, theta0),
-        arm_limit_from_thetas(theta0, inner_theta1),
-    ]
-}
-
-// fn kappa_from_arm_limit(arm: f64, limit: f64) -> (f64, bool) {
-//     let x = arm - limit;
-//     const A: f64 = 1.001;
-//     let b: f64 = 3. * (A.recip() - A.exp());
-//     let x_ = x + A;
-//     (3. * (x_.exp() - x_.recip()) + b, x < 0.)
-// }
-
-// /// (κ, loop-forming)
-// fn kappa_from_arm_limit(arm: Vec2, limit: f64) -> (f64, bool) {
-//     let x = arm.length() / limit - 1.;
-//     const A: f64 = 7. / 6.;
-//     ((-1. / (x + A) + x + 1. / A).sinh().abs(), x > 0.)
-// }
-
-// #[tracing::instrument(level = tracing::Level::INFO, ret(level = tracing::Level::INFO))]
 fn kappa_from_k(k: f64) -> f64 {
     k.exp() - 1. / (k + 1.)
 }
@@ -351,33 +326,48 @@ pub fn make_hyperbez(cb: kurbo::CubicBez) -> HyperbezParams<f64> {
     // both handle on the same side of base
     let same_sided = theta0.is_sign_positive() == theta1.is_sign_negative();
     let loopy = same_sided && k0 > 0. && k1 > 0.;
-    let kappa_sign = theta0.signum() * if loopy { 1. } else { -1. };
-    let kappa0 = curv0.copysign(kappa_sign);
-    let kappa1 = curv1.copysign(kappa_sign);
+    let kappa0 = curv0.copysign(theta0 * if loopy { 1. } else { -1. });
+    let kappa1 = curv1.copysign(kappa0 * if same_sided { 1. } else { -1. });
+    let traversed_theta = theta1 - theta0 + f64::from(loopy) * f64::consts::TAU.copysign(kappa0);
 
-    tracing::trace!(theta0, theta1, lim0, lim1, k0, k1, kappa0, kappa1, same_sided, loopy);
+    tracing::trace!(
+        theta0,
+        theta1,
+        lim0,
+        lim1,
+        k0,
+        k1,
+        kappa0,
+        kappa1,
+        traversed_theta,
+        same_sided,
+        loopy
+    );
 
     // we know, s_critical = -d / (2 c) ; extrema of curvature denominator
     // approximating: s_critical = abs area under control arm 0 / abs area under control arm 0 and 1
     // and assume: d = m c => s_critical = -m / 2
     // therefore: m = -2 s_critical
     let m = -2. * a0 / (a0 + a1);
+
+    if (m + 1.).abs() < 1e-6 {
+        let a = 0.;
+        let b = kappa0;
+        let c = 4. - 2. * (kappa0 + kappa1) / traversed_theta;
+        let d = -c;
+        return HyperbezParams::new(a, b, c, d, 1.);
+    }
+
     let guess_c = {
-        let traversed_theta =
-            theta1 - theta0 + f64::from(loopy) * f64::consts::TAU.copysign(kappa0);
-        if (m + 1.).abs() < 1e-6 {
-            [4. - 2. * (kappa0 + kappa1) / traversed_theta, f64::NAN]
-        } else {
-            let a = (traversed_theta * m - 2. * (m + 1.) * kappa1).powi(2);
-            let b = -4.
-                * (traversed_theta.powi(2)
-                    + kappa0 * traversed_theta * m
-                    + kappa1 * traversed_theta * (2. + 3. * m)
-                    - 2. * (1. + m) * kappa1 * (kappa0 + kappa1));
-            let c = 4. * (kappa0 + kappa1) * (kappa0 + kappa1 - 2. * traversed_theta);
-            let det = (b.powi(2) - 4. * a * c).sqrt();
-            [-b + det, -b - det].map(|x| x * 0.5 / a)
-        }
+        let a = (traversed_theta * m - 2. * (m + 1.) * kappa1).powi(2);
+        let b = -4.
+            * (traversed_theta.powi(2)
+                + kappa0 * traversed_theta * m
+                + kappa1 * traversed_theta * (2. + 3. * m)
+                - 2. * (1. + m) * kappa1 * (kappa0 + kappa1));
+        let c = 4. * (kappa0 + kappa1) * (kappa0 + kappa1 - 2. * traversed_theta);
+        let det = (b.powi(2) - 4. * a * c).sqrt();
+        [-b + det, -b - det].map(|x| x * 0.5 / a)
     };
     let guess_a = guess_c.map(|c| -kappa0 + kappa1 * (c * (m + 1.) + 1.).powf(1.5));
     let guess_d = guess_c.map(|c| m * c);
@@ -386,151 +376,6 @@ pub fn make_hyperbez(cb: kurbo::CubicBez) -> HyperbezParams<f64> {
 
     let [a, b, c, d] = [guess_a[0], kappa0, guess_c[0], guess_d[0]];
     HyperbezParams::new(a, b, c, d, 1.)
-
-    // let limit = arm_limits_from_thetas(theta0, theta1);
-    // let (k0, kappa0) = kappa_from_arm_limit(c0, limit[0]);
-    // let (k1, kappa1) = kappa_from_arm_limit(c1, limit[1]);
-
-    // tracing::trace!(a0, a1, ?limit, k0, k1, kappa0, kappa1);
-
-    // // we know, s_critical = -d / (2 c) ; extrema of curvature denominator
-    // // approximating: s_critical = abs area under control arm 0 / abs area under control arm 0 and 1
-    // // and assume: d = m c => s_critical = -m / 2
-    // // therefore: m = -2 s_critical
-    // let m = -2. * a0 / (a0 + a1);
-    // let guess_c = {
-    //     let kappa0 = -kappa0;
-    //     let kappa1 = -kappa1;
-    //     let traversed_theta = theta1 - theta0;
-    //     if (m + 1.).abs() < 1e-6 {
-    //         [4. - 2. * (kappa0 + kappa1) / traversed_theta, f64::NAN]
-    //     } else {
-    //         let a = (traversed_theta * m - 2. * (m + 1.) * kappa1).powi(2);
-    //         let b = -4.
-    //             * (traversed_theta.powi(2)
-    //                 + kappa0 * traversed_theta * m
-    //                 + kappa1 * traversed_theta * (2. + 3. * m)
-    //                 - 2. * (1. + m) * kappa1 * (kappa0 + kappa1));
-    //         let c = 4. * (kappa0 + kappa1) * (kappa0 + kappa1 - 2. * traversed_theta);
-    //         let det = (b.powi(2) - 4. * a * c).sqrt();
-    //         [-b + det, -b - det].map(|x| x * 0.5 / a)
-    //     }
-    // };
-    // let guess_a = guess_c.map(|c| -kappa0 + kappa1 * (c * (m + 1.) + 1.).powf(1.5));
-    // let guess_d = guess_c.map(|c| m * c);
-
-    // tracing::trace!(
-    //     theta0,
-    //     theta1,
-    //     kappa0,
-    //     kappa1,
-    //     ?guess_a,
-    //     ?guess_c,
-    //     ?guess_d,
-    //     m
-    // );
-
-    // let [c, d] = HyperbezParams::quadratic_for_endk(kappa0, kappa1);
-    // let [a, b] = solve_thetas(-theta0, theta1, c, d, 1.);
-    // let [a, b, c, d] = [guess_a[0], -kappa0, guess_c[0], guess_d[0]];
-    // HyperbezParams::new(a, b, c, d, 1.)
-
-    // let p1_angle_i = -theta0;
-    // let p0_5_i = Affine::rotate(p1_angle_i) * p0_5;
-    // let phi0_5_i = phi0_5 + p1_angle_i;
-    // let theta1_i = theta1 + p1_angle_i;
-
-    // let [guess_c, guess_d] = {
-    //     let th0 = -theta0;
-    //     let th1 = theta1;
-    //     let d0 = c0.hypot();
-    //     let d1 = c1.hypot();
-    //     let tens0 = d0 * 1.5 * (th0.cos() + 1.);
-    //     let tens1 = d1 * 1.5 * (th1.cos() + 1.);
-    //     let mut k0 = HyperbezParams::<f64>::k_for_tension(tens0);
-    //     let mut k1 = HyperbezParams::<f64>::k_for_tension(tens1);
-    //     let cbr = (k0 / k1).powf(1. / 3.);
-    //     // tracing::trace!(th0, th1, d0, d1, tens0, tens1, k0, k1, cbr);
-    //     fn soft(x: f64) -> f64 {
-    //         (0.5 * (1. + x * x)).sqrt()
-    //     }
-    //     k1 /= soft(cbr);
-    //     k0 /= soft(1. / cbr);
-    //     // tracing::trace!(k0, k1);
-
-    //     let dc = (cb.p2 - cb.p1).hypot();
-    //     let kmid = dc.powf(1.5);
-    //     let ratio = (d0 / d1).powf(1.5);
-    //     let blend = 0.5 + 0.5 * (3. - 10. * dc).tanh();
-    //     k0 += blend * (kmid / ratio - k0);
-    //     k1 += blend * (kmid * ratio - k1);
-    //     // tracing::trace!(dc, kmid, ratio, blend, k0, k1);
-    //     HyperbezParams::<f64>::quadratic_for_endk(k0, k1)
-    // };
-
-    // let guess_b = make_guess_b(guess_c, guess_d, theta1, theta0);
-    // let guess_t = (p0_5.x * theta1.abs() + 0.5 * theta0.abs()) / (theta1.abs() + theta0.abs());
-    // let mut guess = [0., guess_b, guess_c, guess_d, guess_t];
-    // tracing::trace!(?guess);
-
-    // let mut err = f64::INFINITY;
-    // // for i in 0..n_iter {
-    // for i in 0..1 {
-    //     let ab = solve_for_ab_exact(theta0, theta1, guess, threshold, n_iter / 2);
-    //     tracing::trace!(?ab);
-
-    //     if let Ok(Solution { params, .. }) = ab {
-    //         guess = params.data.0[0];
-    //     };
-    //     tracing::trace!(?guess);
-
-    //     let cdt = solve_for_cdt_exact(p0_5, phi0_5, guess, 1e-2, 5);
-    //     tracing::trace!(?cdt);
-
-    //     if let Ok(Solution { params, .. }) = cdt {
-    //         guess = params.data.0[0];
-    //     };
-    //     // guess[1] = make_guess_b(guess[2], guess[3], theta1, theta0);
-    //     tracing::trace!(?guess);
-
-    //     let hb = HyperbezParams::new(guess[0], guess[1], guess[2], guess[3], 1.);
-    //     let p1_r = hb.integrate(1.);
-    //     let p1_angle_r = p1_r.y.atan2(p1_r.x);
-    //     let theta1_r = hb.theta(1.);
-    //     let p0_5_r = hb.integrate(guess[4]);
-    //     let phi0_5_r = hb.theta(guess[4]);
-
-    //     let new_err = ([
-    //         p0_5_r.x - p0_5_i.x,
-    //         p0_5_r.y - p0_5_i.y,
-    //         phi0_5_r - phi0_5_i,
-    //         theta1_r - theta1_i,
-    //         p1_angle_r - p1_angle_i,
-    //     ]
-    //     .into_iter()
-    //     .map(|e| e.powi(2))
-    //     .sum::<f64>()
-    //         / 5.)
-    //         .sqrt();
-
-    //     tracing::trace!(i, ?err, ?new_err);
-
-    //     if new_err < threshold || new_err > err + threshold.powi(2) {
-    //         break;
-    //     }
-
-    //     err = new_err;
-    // }
-
-    // let abcdt = solve_for_params_exact(p0_5, phi0_5, theta0, theta1, guess, 1e-2, 7);
-    // tracing::trace!(?abcdt);
-
-    // if let Ok(Solution { params, .. }) = abcdt {
-    //     guess = params.data.0[0];
-    // };
-    // tracing::trace!(?guess);
-
-    // guess
 }
 
 #[allow(unused_must_use)]
@@ -688,171 +533,4 @@ mod tests {
             Point::new(1., 0.),
         ));
     }
-
-    //     #[test]
-    //     #[test_log(default_log_filter = "trace")]
-    //     fn test1() {
-    //         solve_helper(
-    //             Point::new(0.1, 0.4),
-    //             Point::new(0.3, 0.4),
-    //             // solve_with_guess(solve_for_params_exact, [-1., -1., -1., 1.]),
-    //             solve_with_guess(solve_for_params_exact, [3.4, -3., 1., -1.]),
-    //         );
-    //         // solve_for_cubic(cubicbez, [0., 0., 1., -1., 0.5]);
-    //     }
-
-    //     #[test]
-    //     #[test_log(default_log_filter = "trace")]
-    //     fn test1_1() {
-    //         solve_helper(
-    //             Point::new(0.1, 0.4),
-    //             Point::new(0.3, 0.4),
-    //             // solve_with_guess(solve_for_params_exact, [-1., -1., -1., 1.]),
-    //             // solve_with_guess(solve_for_params_exact, [5.3, -5., -1., 1.]),
-    //             solve_with_guess(solve_for_params_exact, [2.8, -2.2, 2.2, -2.2]),
-    //         );
-    //         // solve_for_cubic(cubicbez, [0., 0., 1., -1., 0.5]);
-    //     }
-
-    //     #[test]
-    //     #[test_log(default_log_filter = "trace")]
-    //     fn test2() {
-    //         solve_helper(
-    //             Point::new(0.1, 0.3),
-    //             Point::new(0.3, 0.3),
-    //             solve_with_guess(solve_for_params_exact, [-1., -1., 1., 0.]),
-    //         );
-    //     }
-
-    //     #[test]
-    //     #[test_log(default_log_filter = "trace")]
-    //     fn test3() {
-    //         solve_helper(
-    //             Point::new(0., 0.3),
-    //             Point::new(1., 0.3),
-    //             solve_with_guess(solve_for_params_exact, [-1., -1., 1., 0.]),
-    //         );
-    //     }
-
-    //     #[test]
-    //     #[test_log(default_log_filter = "trace")]
-    //     fn test4() {
-    //         solve_helper(
-    //             Point::new(0.3, 0.15),
-    //             Point::new(0.7, 0.15),
-    //             solve_with_guess(solve_for_params_exact, [0., -1., -1., 1.]),
-    //         );
-    //     }
-
-    //     #[test]
-    //     #[test_log(default_log_filter = "trace")]
-    //     fn test5() {
-    //         solve_helper(
-    //             Point::new(0.3, 0.15),
-    //             Point::new(0.7, 0.15),
-    //             solve_with_guess(solve_for_params_exact, [-1., -1., 1., 0.]),
-    //         );
-    //     }
-
-    //     #[test]
-    //     #[test_log(default_log_filter = "trace")]
-    //     fn test6() {
-    //         solve_helper(
-    //             Point::new(0.3, 0.15),
-    //             Point::new(0.7, 0.15),
-    //             solve_with_guess(solve_for_params_exact, [0., -0.7, 1., -1.]),
-    //         );
-    //     }
-
-    //     #[test]
-    //     #[test_log(default_log_filter = "trace")]
-    //     fn test7() {
-    //         solve_helper(
-    //             Point::new(0.3, 0.15),
-    //             Point::new(0.7, 0.15),
-    //             solve_inferring(solve_for_params_exact),
-    //         );
-    //     }
-
-    //     #[test]
-    //     #[test_log(default_log_filter = "trace")]
-    //     fn test8() {
-    //         solve_helper(
-    //             Point::new(0.3, 0.25),
-    //             Point::new(0.7, 0.25),
-    //             solve_inferring(solve_for_params_exact),
-    //         );
-    //     }
-
-    //     #[test]
-    //     #[test_log(default_log_filter = "trace")]
-    //     fn test9() {
-    //         solve_helper(
-    //             Point::new(0.1, 0.4),
-    //             Point::new(0.3, 0.4),
-    //             solve_inferring(solve_for_params_exact),
-    //         );
-    //         // solve_for_cubic(cubicbez, [0., 0., 1., -1., 0.5]);
-    //     }
-
-    //     #[test]
-    //     #[test_log(default_log_filter = "trace")]
-    //     fn test10() {
-    //         solve_helper(
-    //             Point::new(0.65, 0.5),
-    //             Point::new(0.35, 0.5),
-    //             solve_inferring(solve_for_params_exact),
-    //         );
-    //     }
-
-    //     #[test]
-    //     #[test_log(default_log_filter = "trace")]
-    //     fn test11() {
-    //         solve_helper(
-    //             Point::new(-0.5, 0.5),
-    //             Point::new(1.5, 0.5),
-    //             solve_inferring(solve_for_params_exact),
-    //         );
-    //     }
-
-    //     #[test]
-    //     #[test_log(default_log_filter = "trace")]
-    //     fn test12() {
-    //         solve_helper(
-    //             Point::new(0.1, 0.4),
-    //             Point::new(0.3, 0.4),
-    //             solve_inferring_full,
-    //         );
-    //         // solve_for_cubic(cubicbez, [0., 0., 1., -1., 0.5]);
-    //     }
-
-    //     #[test]
-    //     #[test_log(default_log_filter = "trace")]
-    //     fn test13() {
-    //         solve_helper(
-    //             Point::new(0.65, 0.5),
-    //             Point::new(0.35, 0.5),
-    //             solve_inferring_full,
-    //         );
-    //     }
-
-    //     #[test]
-    //     #[test_log(default_log_filter = "trace")]
-    //     fn test14() {
-    //         solve_helper(
-    //             Point::new(-0.5, 0.5),
-    //             Point::new(1.5, 0.5),
-    //             solve_inferring_full,
-    //         );
-    //     }
-
-    //     #[test]
-    //     #[test_log(default_log_filter = "trace")]
-    //     fn test15() {
-    //         solve_helper(
-    //             Point::new(0.1, 0.4),
-    //             Point::new(0.9, 0.4),
-    //             solve_inferring_full,
-    //         );
-    //     }
 }
