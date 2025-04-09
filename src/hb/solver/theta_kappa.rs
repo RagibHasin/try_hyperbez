@@ -249,107 +249,36 @@ pub fn solve_for_cdt_exact(
     Err(SolveError::OutOfIteration { guess, err })
 }
 
-#[tracing::instrument(ret(level = tracing::Level::TRACE))]
-fn arm_limit_from_thetas(a: f64, b: f64) -> f64 {
-    fn f_normally(a: f64, b: f64) -> f64 {
-        a.sin() / (a + b).sin()
+pub fn make_hyperbez(
+    theta0: f64,
+    theta1: f64,
+    kappa0: f64,
+    kappa1: f64,
+    loopy: bool,
+) -> HyperbezParams<f64> {
+    if theta0.abs() < f64::EPSILON && theta1.abs() < f64::EPSILON {
+        return HyperbezParams::new(0., 0., -1., 1., 1.);
     }
 
-    fn f_regular(a: f64, b: f64) -> f64 {
-        let normally = f_normally(a, b);
-        let coeff_ab_max = ((a + b) * f64::consts::FRAC_1_PI).powi(36);
-        let ang_3deg = 3f64.to_radians();
-        // mtor = mitigator
-        let mted_a = a * 14. / 15. + ang_3deg;
-        let mted_b = b * 14. / 15. + ang_3deg;
-        let mtor_ab_max = f_normally(mted_a, mted_b);
-        let mted_ab_max = (1. - coeff_ab_max) * normally + coeff_ab_max * mtor_ab_max;
-
-        mted_ab_max + (-20. * mted_ab_max - 1.).exp2()
-    }
-
-    let a = a.abs();
-    let b = b.abs();
-
-    let ab = a + b;
-    use f64::consts::PI;
-    if ab == 0. {
-        0.5
-    } else if ab <= PI {
-        f_regular(a, b)
-    } else {
-        f_regular(a * PI / ab, b * PI / ab).powi(2) / f_regular(PI - a, PI - b)
-    }
-}
-
-fn kappa_from_k(k: f64) -> f64 {
-    k.exp() - 1. / (k + 1.)
-}
-
-/// (k, κ)
-#[tracing::instrument(ret(level = tracing::Level::TRACE))]
-fn kappa_from_arm_limit(arm: Vec2, limit: f64) -> (f64, f64) {
-    let theta = arm.angle().abs();
-    let k_circle = 0.5 * theta.sin() / limit - 1.;
-    let a = -2. * theta / kappa_from_k(k_circle);
-    let k = arm.length() / limit - 1.;
-    let kappa = a * kappa_from_k(k);
-    tracing::trace!(theta, k_circle, a, k, kappa);
-    (k, kappa.abs())
-}
-
-#[tracing::instrument(ret(level = tracing::Level::TRACE))]
-pub fn make_hyperbez(cb: kurbo::CubicBez) -> HyperbezParams<f64> {
-    let c0 = cb.p1.to_vec2();
-    let c1 = cb.p3 - cb.p2;
-    let theta0 = c0.atan2();
-    let theta1 = c1.atan2();
-
-    // // TODO: special-case zero components of control arms
-    // let a0 = (c0.x * c0.y).abs();
-    // let a1 = (c1.x * c1.y).abs();
-
-    let (a0, a1) = if c0.x == 0. || c1.x == 0. {
-        (c0.y.abs() * c0.length(), c1.y.abs() * c1.length())
-    } else if c0.y == 0. || c1.y == 0. {
-        (c0.x.abs() * c0.length(), c1.x.abs() * c1.length())
-    } else {
-        ((c0.x * c0.y).abs(), (c1.x * c1.y).abs())
-    };
+    let a0 = theta0 / kappa0.powi(2);
+    let a1 = -theta1 / kappa1.powi(2);
     tracing::trace!(a0, a1);
-
-    let inner_theta1 = -theta1;
-    let lim0 = arm_limit_from_thetas(inner_theta1, theta0);
-    let lim1 = arm_limit_from_thetas(theta0, inner_theta1);
-    let (k0, curv0) = kappa_from_arm_limit(c0, lim0);
-    let (k1, curv1) = kappa_from_arm_limit(c1, lim1);
 
     // both handle on the same side of base
     let same_sided = theta0.is_sign_positive() == theta1.is_sign_negative();
-    let loopy = same_sided && k0 > 0. && k1 > 0.;
-    let kappa0 = curv0.copysign(theta0 * if loopy { 1. } else { -1. });
-    let kappa1 = curv1.copysign(kappa0 * if same_sided { 1. } else { -1. });
     let traversed_theta = theta1 - theta0 + f64::from(loopy) * f64::consts::TAU.copysign(kappa0);
 
-    tracing::trace!(
-        theta0,
-        theta1,
-        lim0,
-        lim1,
-        k0,
-        k1,
-        kappa0,
-        kappa1,
-        traversed_theta,
-        same_sided,
-        loopy
-    );
+    tracing::trace!(traversed_theta, same_sided, loopy);
 
     // we know, s_critical = -d / (2 c) ; extrema of curvature denominator
     // approximating: s_critical = abs area under control arm 0 / abs area under control arm 0 and 1
     // and assume: d = m c => s_critical = -m / 2
     // therefore: m = -2 s_critical
-    let m = -2. * a0 / (a0 + a1);
+    let m = if (a0 + a1).abs() <= 1e-6 {
+        -1.
+    } else {
+        -2. * a0 / (a0 + a1)
+    };
 
     if (m + 1.).abs() < 1e-6 {
         let a = 0.;
@@ -388,172 +317,19 @@ mod tests {
     #[test]
     #[test_log(default_log_filter = "trace")]
     fn test1() {
-        let hb = make_hyperbez(kurbo::CubicBez::new(
-            Point::ZERO,
-            Point::new(0.1, 0.5),
-            Point::new(0.9, 0.5),
-            Point::new(1., 0.),
-        ));
+        let _ = make_hyperbez(0., -0., -1., -1., false);
     }
 
     #[test]
     #[test_log(default_log_filter = "trace")]
     fn test2() {
-        let hb = make_hyperbez(kurbo::CubicBez::new(
-            Point::ZERO,
-            Point::new(0., 0.5),
-            Point::new(1., 0.5),
-            Point::new(1., 0.),
-        ));
+        let _ = make_hyperbez(0.0174532925, -0.0174532925, -1., -1., false);
+        let _ = make_hyperbez(-0.0174532925, 0.0174532925, 1., 1., false);
     }
 
     #[test]
     #[test_log(default_log_filter = "trace")]
     fn test3() {
-        let hb = make_hyperbez(kurbo::CubicBez::new(
-            Point::ZERO,
-            Point::new(0.0, 0.5),
-            Point::new(1., 0.5),
-            Point::new(1., 0.),
-        ));
-    }
-
-    #[test]
-    #[test_log(default_log_filter = "trace")]
-    fn test4() {
-        let hb = make_hyperbez(kurbo::CubicBez::new(
-            Point::ZERO,
-            Point::new(-0.004, 0.5),
-            Point::new(1.004, 0.5),
-            Point::new(1., 0.),
-        ));
-    }
-
-    #[test]
-    #[test_log(default_log_filter = "trace")]
-    fn test5() {
-        // fails
-        let hb = make_hyperbez(kurbo::CubicBez::new(
-            Point::ZERO,
-            Point::new(-0.02, 0.5),
-            Point::new(1.02, 0.5),
-            Point::new(1., 0.),
-        ));
-    }
-
-    #[test]
-    #[test_log(default_log_filter = "trace")]
-    fn test6() {
-        let hb = make_hyperbez(kurbo::CubicBez::new(
-            Point::ZERO,
-            Point::new(-0.2, 0.05),
-            Point::new(1.2, 0.05),
-            Point::new(1., 0.),
-        ));
-    }
-
-    #[test]
-    #[test_log(default_log_filter = "trace")]
-    fn test7() {
-        let hb = make_hyperbez(kurbo::CubicBez::new(
-            Point::ZERO,
-            Point::new(-0.2, 0.1),
-            Point::new(1.2, 0.1),
-            Point::new(1., 0.),
-        ));
-    }
-
-    #[test]
-    #[test_log(default_log_filter = "trace")]
-    fn test8() {
-        let hb = make_hyperbez(kurbo::CubicBez::new(
-            Point::ZERO,
-            Point::new(0.51, 0.5),
-            Point::new(0.49, 0.5),
-            Point::new(1., 0.),
-        ));
-    }
-
-    #[test]
-    #[test_log(default_log_filter = "trace")]
-    fn test9() {
-        let hb = make_hyperbez(kurbo::CubicBez::new(
-            Point::ZERO,
-            Point::new(-0.02, 0.5),
-            Point::new(1.02, 0.5),
-            Point::new(1., 0.),
-        ));
-    }
-
-    #[test]
-    #[test_log(default_log_filter = "trace")]
-    fn test10() {
-        let hb = make_hyperbez(kurbo::CubicBez::new(
-            Point::ZERO,
-            Point::new(-0.25, 0.02),
-            Point::new(1.25, 0.02),
-            Point::new(1., 0.),
-        ));
-    }
-
-    #[test]
-    #[test_log(default_log_filter = "trace")]
-    fn test11() {
-        let arm = arm_limit_from_thetas(f64::consts::FRAC_PI_2, f64::consts::FRAC_PI_2);
-    }
-
-    #[test]
-    #[test_log(default_log_filter = "trace")]
-    fn test12() {
-        let hb = make_hyperbez(kurbo::CubicBez::new(
-            Point::ZERO,
-            Point::new(0.1, -0.1),
-            Point::new(0.9, -0.1),
-            Point::new(1., 0.),
-        ));
-    }
-
-    #[test]
-    #[test_log(default_log_filter = "trace")]
-    fn test13() {
-        let hb = make_hyperbez(kurbo::CubicBez::new(
-            Point::ZERO,
-            Point::new(0.1, 0.1),
-            Point::new(0.9, 0.1),
-            Point::new(1., 0.),
-        ));
-    }
-
-    #[test]
-    #[test_log(default_log_filter = "trace")]
-    fn test14() {
-        let hb = make_hyperbez(kurbo::CubicBez::new(
-            Point::ZERO,
-            Point::new(0.2, 0.5),
-            Point::new(0.8, -0.5),
-            Point::new(1., 0.),
-        ));
-    }
-
-    #[test]
-    #[test_log(default_log_filter = "trace")]
-    fn test15() {
-        let hb = make_hyperbez(kurbo::CubicBez::new(
-            Point::ZERO,
-            Point::new(0.2, 0.),
-            Point::new(0.8, 0.),
-            Point::new(1., 0.),
-        ));
-    }
-
-    #[test]
-    #[test_log(default_log_filter = "trace")]
-    fn test16() {
-        let hb = make_hyperbez(kurbo::CubicBez::new(
-            Point::ZERO,
-            Point::new(0.2499619237e-2, 0.0043631016e-2),
-            Point::new(1. - 0.2499619237e-2, 0.0043631016e-2),
-            Point::new(1., 0.),
-        ));
+        let _ = make_hyperbez(-0.0174532925, 0.0174532925, 1., 1., false);
     }
 }

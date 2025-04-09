@@ -16,10 +16,24 @@ pub struct Memoized<K, V> {
 
 impl<K: PartialEq, V> Memoized<K, V> {
     pub fn update(&mut self, data: K, logic: impl FnOnce(&K) -> V) -> &V {
+        self.try_update(data, |data, _| Some(logic(data)))
+    }
+
+    pub fn try_update(
+        &mut self,
+        data: K,
+        logic: impl FnOnce(&K, Option<&mut V>) -> Option<V>,
+    ) -> &V {
         if (self.key != data) || self.value.is_none() {
-            self.value = Some(logic(&data));
+            if let Some(value) = logic(&data, self.value.as_mut()) {
+                self.value = Some(value);
+            }
             self.key = data;
         }
+        self.value()
+    }
+
+    pub fn value(&self) -> &V {
         self.value.as_ref().unwrap()
     }
 }

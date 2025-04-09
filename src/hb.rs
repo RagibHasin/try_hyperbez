@@ -554,6 +554,7 @@ pub mod solver {
     pub mod ptan_analytic;
     pub mod ptan_dual;
     pub mod ptan_dual_endk;
+    pub mod theta_kappa;
 }
 
 #[allow(unused_must_use)]
