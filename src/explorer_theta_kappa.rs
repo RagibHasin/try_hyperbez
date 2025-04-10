@@ -77,7 +77,7 @@ impl Default for AppData {
 }
 
 impl AppData {
-    fn maintain_symmetry(&mut self, handle: Handle) {
+    fn maintain_arrangement(&mut self, handle: Handle) {
         match self.arrangement {
             Arrangement::Symmetric => match handle {
                 Handle::Theta0 => {
@@ -120,7 +120,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
 
     let params = hb::solver::theta_kappa::make_hyperbez(
         data.theta0,
-        -data.theta1,
+        data.theta1,
         data.kappa0,
         data.kappa1,
         data.loopy,
@@ -218,7 +218,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
             textbox(data.theta0.to_degrees()).adapt(move |data: &mut AppData, thunk| {
                 let res = thunk.call(&mut data.theta0);
                 data.theta0 = data.theta0.to_radians();
-                data.maintain_symmetry(Handle::Theta0);
+                data.maintain_arrangement(Handle::Theta0);
                 res
             }),
         );
@@ -228,7 +228,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
             textbox(data.theta1.to_degrees()).adapt(move |data: &mut AppData, thunk| {
                 let res = thunk.call(&mut data.theta1);
                 data.theta1 = data.theta1.to_radians();
-                data.maintain_symmetry(Handle::Theta1);
+                data.maintain_arrangement(Handle::Theta1);
                 res
             }),
         );
@@ -237,7 +237,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
             div(()),
             textbox(data.kappa0).adapt(move |data: &mut AppData, thunk| {
                 let res = thunk.call(&mut data.kappa0);
-                data.maintain_symmetry(Handle::Theta0);
+                data.maintain_arrangement(Handle::Theta0);
                 res
             }),
         );
@@ -246,7 +246,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
             div(()),
             textbox(data.kappa1).adapt(move |data: &mut AppData, thunk| {
                 let res = thunk.call(&mut data.kappa1);
-                data.maintain_symmetry(Handle::Theta1);
+                data.maintain_arrangement(Handle::Theta1);
                 res
             }),
         );
@@ -282,6 +282,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
                 "Free" => data.arrangement = Arrangement::Free,
                 _ => {}
             }
+            data.maintain_arrangement(Handle::Theta0);
         });
 
         let frag_running = html::button(if data.running { "Pause" } else { "Resume" })
@@ -423,10 +424,11 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
                     match data {
                         Handle::Theta0 => state.data.theta0 = p.to_vec2().angle(),
                         Handle::Theta1 => {
-                            state.data.theta1 = (Point::new(BASE_WIDTH, 0.) - p).angle()
+                            state.data.theta1 =
+                                (Point::new(BASE_WIDTH, 0.) - Affine::FLIP_Y * p).angle()
                         }
                     };
-                    state.data.maintain_symmetry(data);
+                    state.data.maintain_arrangement(data);
                 })
         });
 
