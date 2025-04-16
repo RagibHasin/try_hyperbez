@@ -67,8 +67,8 @@ impl Default for AppData {
         Self {
             theta0: f64::consts::FRAC_PI_4,
             theta1: f64::consts::FRAC_PI_4,
-            kappa0: -f64::consts::SQRT_2,
-            kappa1: -f64::consts::SQRT_2,
+            kappa0: -f64::consts::FRAC_PI_2,
+            kappa1: -f64::consts::FRAC_PI_2,
             loopy: false,
             running: true,
             arrangement: Arrangement::Symmetric,

@@ -29,9 +29,10 @@ struct AppData {
     a: f64,
     b: f64,
     c: f64,
-    d: f64,
+    d_m: f64,
     e: f64,
 
+    is_d: bool,
     render_method: RenderMethod,
     accuracy_order: f64,
 }
@@ -42,6 +43,7 @@ enum RenderMethod {
     OptimizedCurveFit,
     SubdivisionSolve,
 }
+
 struct MemoizedState {
     hyperbez: hb::Hyperbezier,
     theta: Rc<[f64]>,
@@ -61,11 +63,19 @@ impl Default for AppData {
             a: 0.,
             b: -1.,
             c: -1.,
-            d: 1.,
+            d_m: 1.,
             e: 1.,
+            is_d: true,
             render_method: RenderMethod::UnoptimizedCurveFit,
             accuracy_order: 1.,
         }
+    }
+}
+
+impl AppData {
+    fn toggle_is_d(&mut self) {
+        self.d_m *= if self.is_d { self.c.recip() } else { self.c };
+        self.is_d = !self.is_d;
     }
 }
 
@@ -87,8 +97,9 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let d_limit = d_limit_rounded(data.a, data.b, data.c);
     // state.d = state.d.clamp(d_limit.start, d_limit.end);
 
+    let d = data.d_m * if data.is_d { 1. } else { data.c };
     let hyperbez = hb::Hyperbezier::from_points_params(
-        hb::HyperbezParams::new(data.a, data.b, data.c, data.d, data.e),
+        hb::HyperbezParams::new(data.a, data.b, data.c, d, data.e),
         Point::ZERO,
         Point::new(BASE_WIDTH, 0.),
     );
@@ -132,6 +143,11 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let frag_path = path.id("hyperbez");
     let frag_points = g(points).id("nodes");
 
+    let frag_m_d = if data.is_d {
+        labeled_valued("m: ", (), format!("{:.3}", data.d_m / data.c))
+    } else {
+        labeled_valued("d: ", (), format!("{:.3}", d))
+    };
     let frag_arclen = labeled_valued("S / b: ", (), format!("{:.3}", arclen));
     let frag_theta0 = labeled_valued("θ₀: ", (), format!("{:.1}°", theta0));
     let frag_theta1 = labeled_valued("θ₁: ", (), format!("{:.1}°", theta1));
@@ -145,6 +161,7 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let frag_n_points = labeled_valued("n: ", (), n_points);
 
     let frag_results = div((
+        frag_m_d,
         frag_arclen,
         spacer(),
         frag_theta0,
@@ -189,11 +206,17 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
         }),
         textbox(data.c).map_state(move |data: &mut AppData| &mut data.c),
     );
-    let frag_d = labeled_valued(
-        "d: ",
-        slider(data.d, d_limit.start, d_limit.end, 0.1)
-            .map_state(move |data: &mut AppData| &mut data.d),
-        textbox(data.d).map_state(move |data: &mut AppData| &mut data.d),
+    let frag_d_m = labeled_valued(
+        html::span(if data.is_d { "d: " } else { "m: " })
+            .on_dblclick(|data: &mut AppData, _| data.toggle_is_d()),
+        slider(
+            data.d_m,
+            if data.is_d { d_limit.start } else { -3. },
+            if data.is_d { d_limit.end } else { -0.1 },
+            0.1,
+        )
+        .map_state(move |data: &mut AppData| &mut data.d_m),
+        textbox(data.d_m).map_state(move |data: &mut AppData| &mut data.d_m),
     );
     let frag_e = labeled_valued(
         "e: ",
@@ -243,7 +266,7 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
         frag_a,
         frag_b,
         frag_c,
-        frag_d,
+        frag_d_m,
         frag_e,
         spacer(),
         frag_render_method,

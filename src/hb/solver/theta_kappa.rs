@@ -134,11 +134,15 @@ pub fn make_hyperbez(
 
     const EPS: f64 = 1e-6;
 
+    fn c_symmetric(kappa0: f64, kappa1: f64, traversed_theta: f64) -> f64 {
+        4. - 2. * (kappa0 + kappa1) / traversed_theta
+    }
+
     // symmetric
     if (theta0 - inner_theta1).abs() < EPS && (kappa0 - kappa1).abs() < EPS {
         let a = 0.;
         let b = kappa0;
-        let c = 4. - 2. * (kappa0 + kappa1) / traversed_theta;
+        let c = c_symmetric(kappa0, kappa1, traversed_theta);
         let d = -c;
         tracing::trace!(c, "Symmetric");
         return HyperbezParams::new(a, b, c, d, 1.);
@@ -148,6 +152,7 @@ pub fn make_hyperbez(
     if (theta0 + inner_theta1).abs() < EPS && (kappa0 + kappa1).abs() < EPS {
         let a = 2. * kappa1;
         let b = kappa0;
+        // TODO: refine this guess
         let theta0_5 = 3.4 * theta0 * theta0.sin() / kappa0 - theta0;
         let c = 2. * (1. + (-kappa0 - (theta0_5 * (theta0_5 + 2. * kappa0)).sqrt()) / theta0_5);
         // let c = 2. + (kappa0 + 2. * (theta0 * (theta0 - kappa0)).sqrt()) / theta0;
@@ -162,7 +167,7 @@ pub fn make_hyperbez(
                 let p1 = hb.integrate(dual_1);
                 let p1_angle = p1.y.atan2(p1.x);
 
-                [norm_radians(p1_angle + DualVec::from(theta0))]
+                [norm_radians(p1_angle + theta0)]
             },
             |[c]| [c.min(3.99999)],
             [c],
@@ -184,39 +189,74 @@ pub fn make_hyperbez(
         return hb;
     }
 
-    fn criticality_bias(theta: f64, kappa: f64) -> f64 {
-        let sin_2theta = (2. * theta).sin();
-        (sin_2theta + f64::from(sin_2theta.is_sign_negative())) * (-kappa.abs()).exp2()
+    fn s_target_for_traversed_theta(a: f64, b: f64, c: f64, traversed_theta: f64) -> [f64; 2] {
+        let quad_e = (4. * b.powi(2)
+            + 4. * b * c * traversed_theta
+            + (c - 4.) * c * traversed_theta.powi(2))
+            * c;
+        let quad_a = 4. * a.powi(2) - 8. * a * c * traversed_theta - quad_e;
+        let quad_b = 8. * a * (b + c * traversed_theta) + quad_e;
+        let quad_c = -traversed_theta * (8. * a + 4. * b * c + (c - 4.) * c * traversed_theta);
+        let quad_det = (quad_b.powi(2) - 4. * quad_a * quad_c).sqrt();
+        [
+            0.5 * (-quad_b + quad_det) / quad_a,
+            0.5 * (-quad_b - quad_det) / quad_a,
+        ]
     }
-    fn criticality_bias_alt(theta: f64, kappa: f64) -> f64 {
-        let cos_theta = -theta.cos();
-        (cos_theta + f64::from(cos_theta.is_sign_negative())) * (-kappa.abs()).exp2()
+    fn s_target_for_geometry(
+        kappa0: f64,
+        kappa1: f64,
+        traversed_theta: f64,
+        pseudo_traversed_theta: f64,
+    ) -> [f64; 2] {
+        s_target_for_traversed_theta(
+            kappa1 - kappa0,
+            kappa0,
+            c_symmetric(kappa0, kappa1, pseudo_traversed_theta),
+            traversed_theta,
+        )
     }
 
-    let (a0, a1) = if (theta0 - f64::consts::FRAC_PI_2).abs() < EPS
-        || (inner_theta1 - f64::consts::FRAC_PI_2).abs() < EPS
     {
-        (
-            criticality_bias_alt(theta0, kappa0),
-            criticality_bias_alt(inner_theta1, kappa1),
-        )
-    } else {
-        (
-            criticality_bias(theta0, kappa0),
-            criticality_bias(inner_theta1, kappa1),
-        )
-    };
-    // let a0 = theta0 / kappa0.powi(2);
-    // let a1 = -theta1 / kappa1.powi(2);
+        let s_targets = [
+            s_target_for_geometry(
+                kappa0,
+                kappa1,
+                traversed_theta,
+                2. * theta1.abs().min(theta0.abs()).copysign(theta1)
+                    + f64::from(loopy) * f64::consts::TAU.copysign(kappa0),
+            ),
+            s_target_for_geometry(
+                kappa0,
+                kappa1,
+                traversed_theta,
+                2. * theta1.abs().max(theta0.abs()).copysign(theta1)
+                    + f64::from(loopy) * f64::consts::TAU.copysign(kappa0),
+            ),
+        ];
+        let s_criticals = s_targets.map(|s| 0.5 / s[1]);
+        let s_critical = (s_criticals[0] * s_criticals[1]).sqrt();
+        tracing::trace!(?s_targets, ?s_criticals, s_critical);
+    }
+    fn criticality_bias(theta: f64, kappa: f64) -> f64 {
+        ((2. * theta).sin().abs() + 0.00390625) * (-kappa.abs()).exp2()
+    }
+    let a0 = criticality_bias(theta0, kappa0);
+    let a1 = criticality_bias(inner_theta1, kappa1);
 
     // we know, s_critical = -d / (2 c) ; extrema of curvature denominator
     // approximating: s_critical = abs area under control arm 0 / abs area under control arm 0 and 1
     // and assume: d = m c => s_critical = -m / 2
     // therefore: m = -2 s_critical
-    let m = if (a0 + a1).abs() <= EPS {
-        -1.
-    } else {
-        -2. * a0 / (a0 + a1)
+    let m = -2. * a0 / (a0 + a1);
+    let m = {
+        let k0 = 0.125 * (kappa0 / theta0).abs().powi(3);
+        let k1 = 0.125 * (kappa1 / theta1).abs().powi(3);
+        let gamma = (k1 / k0).abs().cbrt();
+        let gamma_p1 = gamma + 1.;
+        let gamma_inv_p1 = 1. / gamma + 1.;
+        tracing::trace!(k0, k1, gamma, gamma_p1, gamma_inv_p1);
+        2. * (k0 * gamma_p1 - gamma_inv_p1) / (gamma_inv_p1.powi(2) - 2. * k0 * gamma_p1)
     };
 
     tracing::trace!(a0, a1, m);
@@ -237,7 +277,38 @@ pub fn make_hyperbez(
 
     tracing::trace!(?guess_a, ?guess_c, ?guess_d);
 
-    let [a, b, c, d] = [guess_a[0], kappa0, guess_c[0], guess_d[0]];
+    let b = kappa0;
+    let soln = solve(
+        |[c, d]| {
+            let dual_1 = DualVec::from(1.);
+
+            let a = (c + d + 1.).powf(1.5) * kappa1 - kappa0;
+            let hb = HyperbezParams::new(a, b.into(), c, d, dual_1);
+
+            let p1 = hb.integrate(dual_1);
+            let p1_angle = p1.y.atan2(p1.x);
+
+            let del_theta = hb.theta(dual_1);
+
+            [
+                norm_radians(p1_angle + theta0),
+                norm_radians(del_theta - traversed_theta),
+            ]
+        },
+        |cd| cd,
+        [guess_c[0], guess_d[0]],
+        1e-6,
+        10,
+    );
+    tracing::trace!(?soln);
+    let [c, d] = match soln {
+        Ok(Solution { params: guess, .. })
+        | Err(SolveError::OutOfIteration { guess, .. } | SolveError::Singularity { guess, .. }) => {
+            guess.data.0[0]
+        }
+    };
+    let a = (c + d + 1.).powf(1.5) * kappa1 - kappa0;
+    // let [a, b, c, d] = [guess_a[0], kappa0, guess_c[0], guess_d[0]];
     HyperbezParams::new(a, b, c, d, 1.)
 }
 
@@ -324,5 +395,48 @@ mod tests {
             1.,
             false,
         );
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test10() {
+        let _ = make_hyperbez(
+            f64::consts::FRAC_PI_4,
+            f64::consts::PI,
+            -f64::consts::SQRT_2,
+            -f64::consts::SQRT_2,
+            false,
+        );
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test11() {
+        let _ = make_hyperbez(
+            f64::consts::FRAC_PI_4,
+            46f64.to_radians(),
+            -f64::consts::SQRT_2,
+            -f64::consts::SQRT_2,
+            false,
+        );
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test12() {
+        let _ = make_hyperbez(
+            f64::consts::FRAC_PI_4,
+            f64::consts::FRAC_PI_4,
+            // 46f64.to_radians(),
+            -f64::consts::FRAC_PI_2,
+            -1.8,
+            false,
+        );
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test13() {
+        let _ = make_hyperbez(60f64.to_radians(), 15f64.to_radians(), -1., 1., false);
     }
 }
