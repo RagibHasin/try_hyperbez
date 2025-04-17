@@ -71,7 +71,7 @@ fn solve<const ORDER: usize>(
     f: impl Fn([DualSVec64<ORDER>; ORDER]) -> [DualSVec64<ORDER>; ORDER],
     u: impl Fn([f64; ORDER]) -> [f64; ORDER],
     guess: [f64; ORDER],
-    threshold: f64,
+    threshold: [f64; ORDER],
     n_iter: usize,
 ) -> SolveResult<ORDER> {
     let mut guess = SVector::from_data(nalgebra::ArrayStorage([guess]));
@@ -93,7 +93,7 @@ fn solve<const ORDER: usize>(
             });
         }
 
-        if new_err.iter().all(|e| e.abs() < threshold) {
+        if new_err.iter().zip(threshold).all(|(e, eps)| e.abs() < eps) {
             return Ok(Solution {
                 params: guess,
                 err: new_err,
@@ -171,7 +171,7 @@ pub fn make_hyperbez(
             },
             |[c]| [c.min(3.99999)],
             [c],
-            1e-6,
+            [1e-2],
             10,
         );
         tracing::trace!(?soln);
@@ -277,6 +277,40 @@ pub fn make_hyperbez(
 
     tracing::trace!(?guess_a, ?guess_c, ?guess_d);
 
+    let (guess_c_alt, guess_d_alt) = {
+        let kappa012 = kappa0 * kappa1.powi(2);
+        let l0 = traversed_theta.powi(3) + kappa012;
+        let l1 = (l0 * kappa012 * traversed_theta.powi(6)).abs();
+        let l2 =
+            l1 - kappa012 * traversed_theta.powi(9) + kappa012.powi(2) * traversed_theta.powi(6);
+        let l2_t = l2.cbrt();
+        let cbrt2 = 2f64.cbrt();
+        let d = -2.
+            + 2. * kappa0 / traversed_theta
+            + (cbrt2.powi(2) * l2_t) / (traversed_theta.powi(3) * kappa1)
+            - (2. * cbrt2 * traversed_theta.powi(2) * kappa0 * kappa1) / l2_t;
+        let c = (cbrt2.powi(2) * l1 * traversed_theta * kappa012
+            - cbrt2 * l2_t * traversed_theta.powi(9) * kappa012
+            + 4. * cbrt2 * l2_t * traversed_theta.powi(8) * kappa0 * kappa1.powi(3)
+            + 2. * cbrt2.powi(2) * traversed_theta.powi(12) * kappa0 * kappa1.powi(3)
+            - 4. * l2_t.powi(2) * traversed_theta.powi(2) * kappa012.powi(2)
+            + cbrt2.powi(2) * traversed_theta.powi(10) * kappa012.powi(2)
+            + cbrt2.powi(2) * traversed_theta.powi(7) * kappa012.powi(3)
+            + cbrt2 * l1 * (l2_t - 2. * cbrt2 * kappa0 * kappa1.powi(3))
+            - 4. * l2_t
+                * traversed_theta.powi(5)
+                * kappa012
+                * (l2_t - cbrt2 * kappa0 * kappa1.powi(3))
+            - 2. * traversed_theta.powi(3)
+                * (cbrt2.powi(2) * l1 * kappa1 - l2_t.powi(2) * kappa0 * kappa1.powi(4))
+            + traversed_theta.powi(6)
+                * (2. * l2_t.powi(2) * kappa1.powi(2)
+                    - cbrt2 * l2_t * kappa012.powi(2)
+                    - 2. * cbrt2.powi(2) * kappa0.powi(3) * kappa1.powi(7)))
+            / (2. * l0 * l2_t.powi(2) * traversed_theta.powi(3) * kappa1.powi(2));
+        (c, d)
+    };
+
     let b = kappa0;
     let soln = solve(
         |[c, d]| {
@@ -296,8 +330,8 @@ pub fn make_hyperbez(
             ]
         },
         |cd| cd,
-        [guess_c[0], guess_d[0]],
-        1e-6,
+        [guess_c_alt, guess_d_alt],
+        [1e-2, 1e-3],
         10,
     );
     tracing::trace!(?soln);
@@ -429,7 +463,7 @@ mod tests {
             f64::consts::FRAC_PI_4,
             // 46f64.to_radians(),
             -f64::consts::FRAC_PI_2,
-            -1.8,
+            -1.6,
             false,
         );
     }
