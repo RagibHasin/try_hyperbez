@@ -311,6 +311,40 @@ pub fn make_hyperbez(
         (c, d)
     };
 
+    let (guess_c_alt, guess_d_alt) = {
+        let a = 2. * (theta0 - inner_theta1).sin() * kappa0;
+        let k012 = (a + kappa0) * kappa1.powi(2);
+        let l0 = traversed_theta.powi(3) + k012;
+        let l1 = (l0 * k012 * traversed_theta.powi(6)).abs();
+        let l2 = l1 + traversed_theta.powi(6) * k012 * (k012 - traversed_theta.powi(3));
+        let l2_t = l2.cbrt();
+        let l3 = traversed_theta * (a + kappa0) * kappa1;
+        let l4 = l3 - 2. * k012;
+        let cbrt2 = 2f64.cbrt();
+        let d = -2.
+            + 2. * kappa0 / traversed_theta
+            + (cbrt2.powi(2) * l2_t) / (traversed_theta.powi(3) * kappa1)
+            - (2. * cbrt2 * traversed_theta * l3) / l2_t;
+        let c = (l1
+            * (cbrt2 * l2_t + cbrt2.powi(2) * (l4 - 2. * traversed_theta.powi(3)) * kappa1)
+            + traversed_theta.powi(2)
+                * (k012 + traversed_theta.powi(3))
+                * kappa1.powi(2)
+                * (2. * l2_t.powi(2) * (traversed_theta - 2. * kappa0)
+                    - cbrt2
+                        * l2_t
+                        * traversed_theta.powi(3)
+                        * (a + kappa0)
+                        * (traversed_theta - 4. * kappa1)
+                    + cbrt2.powi(2)
+                        * l3
+                        * traversed_theta.powi(3)
+                        * (l4 + 2. * traversed_theta.powi(3))))
+            / (2. * l0 * l2_t.powi(2) * traversed_theta.powi(3) * kappa1.powi(2));
+        tracing::trace!(a, c, d);
+        (c, d)
+    };
+
     let b = kappa0;
     let soln = solve(
         |[c, d]| {
@@ -460,10 +494,11 @@ mod tests {
     fn test12() {
         let _ = make_hyperbez(
             f64::consts::FRAC_PI_4,
-            f64::consts::FRAC_PI_4,
+            f64::consts::FRAC_PI_3,
             // 46f64.to_radians(),
             -f64::consts::FRAC_PI_2,
-            -1.6,
+            -f64::consts::FRAC_PI_3 * 2.,
+            // -1.7,
             false,
         );
     }
