@@ -11,13 +11,13 @@ use xilem_web::{
     AnyDomView, DomView,
 };
 
-use hyperbez_toy::*;
+use hyperbez_toy::{utils::parse_param, *};
 
 use crate::components::*;
 
 #[derive(Default)]
 pub(crate) struct AppState {
-    data: AppData,
+    pub data: AppData,
     memo: Memoized<AppData, MemoizedState>,
 
     plots: plots::State,
@@ -25,7 +25,7 @@ pub(crate) struct AppState {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-struct AppData {
+pub(crate) struct AppData {
     a: f64,
     b: f64,
     c: f64,
@@ -55,7 +55,68 @@ struct MemoizedState {
     frag_options: Rc<AnyDomView<AppData>>,
 }
 
+impl From<AppData> for AppState {
+    fn from(data: AppData) -> Self {
+        AppState {
+            data,
+            ..Default::default()
+        }
+    }
+}
+
 const BASE_WIDTH: f64 = 500.;
+
+impl std::str::FromStr for AppData {
+    type Err = Box<dyn std::error::Error>;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let params = &mut s.split(",");
+        let a = parse_param(params, "a")?;
+        let b = parse_param(params, "b")?;
+        let c = parse_param(params, "c")?;
+        let d = parse_param(params, "d")?;
+        let e = parse_param(params, "e")?;
+        let render_method = match params.next().ok_or("not enough params: render_option")? {
+            "unopt" => RenderMethod::UnoptimizedCurveFit,
+            "opt" => RenderMethod::OptimizedCurveFit,
+            "subdiv" => RenderMethod::SubdivisionSolve,
+            _ => unreachable!(),
+        };
+        let accuracy_order = parse_param(params, "accuracy_order")?;
+        Ok(AppData {
+            a,
+            b,
+            c,
+            d_m: d,
+            e,
+            is_d: true,
+            render_method,
+            accuracy_order,
+        })
+    }
+}
+
+impl std::fmt::Display for AppData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let AppData {
+            a,
+            b,
+            c,
+            d_m,
+            e,
+            is_d,
+            render_method,
+            accuracy_order,
+        } = *self;
+        let render = match render_method {
+            RenderMethod::UnoptimizedCurveFit => "unopt",
+            RenderMethod::OptimizedCurveFit => "opt",
+            RenderMethod::SubdivisionSolve => "subdiv",
+        };
+        let d = d_m * if is_d { 1. } else { c };
+        write!(f, "{a},{b},{c},{d},{e},{render},{accuracy_order}",)
+    }
+}
 
 impl Default for AppData {
     fn default() -> Self {

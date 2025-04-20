@@ -1,4 +1,4 @@
-use std::{f64, rc::Rc};
+use std::{f64, fmt::Write, rc::Rc};
 
 use wasm_bindgen::JsCast;
 use xilem_web::{
@@ -11,13 +11,13 @@ use xilem_web::{
     AnyDomView, DomView,
 };
 
-use hyperbez_toy::*;
+use hyperbez_toy::{utils::parse_param, *};
 
 use crate::components::*;
 
 #[derive(Default)]
 pub(crate) struct AppState {
-    data: AppData,
+    pub data: AppData,
     memo: Memoized<AppData, MemoizedState>,
 
     plots: plots::State,
@@ -25,7 +25,7 @@ pub(crate) struct AppState {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-struct AppData {
+pub(crate) struct AppData {
     theta0: f64,
     theta1: f64,
     kappa0: f64,
@@ -57,7 +57,75 @@ struct MemoizedState {
     frag_options: Rc<AnyDomView<AppData>>,
 }
 
+impl From<AppData> for AppState {
+    fn from(data: AppData) -> Self {
+        AppState {
+            data,
+            ..Default::default()
+        }
+    }
+}
+
 const BASE_WIDTH: f64 = 500.;
+
+impl std::str::FromStr for AppData {
+    type Err = Box<dyn std::error::Error>;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let params = &mut s.split(",");
+        let theta0 = parse_param::<f64>(params, "theta0")?.to_radians();
+        let kappa0 = parse_param::<f64>(params, "kappa0")?;
+        let (arrangement, theta1, kappa1) = match params
+            .next()
+            .ok_or("not enough params: arrangement, theta1, kappa1")?
+        {
+            "sym" => (Arrangement::Symmetric, theta0, kappa0),
+            "anti" => (Arrangement::Antisymmetric, -theta0, -kappa0),
+            _ => (
+                Arrangement::Free,
+                parse_param::<f64>(params, "theta1")?.to_radians(),
+                parse_param(params, "kappa1")?,
+            ),
+        };
+        let loopy = match params.next().ok_or("not enough params: loopy")? {
+            "T" => true,
+            "F" => false,
+            _ => unreachable!(),
+        };
+        Ok(AppData {
+            theta0,
+            theta1,
+            kappa0,
+            kappa1,
+            loopy,
+            running: true,
+            arrangement,
+        })
+    }
+}
+
+impl std::fmt::Display for AppData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let AppData {
+            theta0,
+            theta1,
+            kappa0,
+            kappa1,
+            loopy,
+            arrangement,
+            ..
+        } = *self;
+        let theta0 = theta0.to_degrees();
+        let theta1 = theta1.to_degrees();
+        write!(f, "{theta0},{kappa0},")?;
+        match arrangement {
+            Arrangement::Symmetric => f.write_str("sym,"),
+            Arrangement::Antisymmetric => f.write_str("anti,"),
+            Arrangement::Free => write!(f, "{theta1},{kappa1},"),
+        }?;
+        f.write_char(if loopy { 'T' } else { 'F' })
+    }
+}
 
 const P0: Point = Point::ZERO;
 const P3: Point = Point::new(BASE_WIDTH, 0.);

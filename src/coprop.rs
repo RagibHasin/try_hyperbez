@@ -10,13 +10,13 @@ use xilem_web::{
     AnyDomView, DomView,
 };
 
-use hyperbez_toy::{hb::solver::coprop_dual, *};
+use hyperbez_toy::{hb::solver::coprop_dual, utils::parse_param, *};
 
 use crate::components::*;
 
 #[derive(Default)]
 pub(crate) struct AppState {
-    data: AppData,
+    pub data: AppData,
     memo: Memoized<AppData, MemoizedState>,
 
     plots: plots::State,
@@ -47,7 +47,54 @@ struct MemoizedState {
     frag_options: Rc<AnyDomView<AppData>>,
 }
 
+impl From<AppData> for AppState {
+    fn from(data: AppData) -> Self {
+        AppState {
+            data,
+            ..Default::default()
+        }
+    }
+}
+
 const BASE_WIDTH: f64 = 500.;
+
+impl std::str::FromStr for AppData {
+    type Err = Box<dyn std::error::Error>;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let params = &mut s.split(",");
+        let p1_x = parse_param(params, "p1_x")?;
+        let p1_y = parse_param(params, "p1_y")?;
+        let (symmetric, p2_x, p2_y) = match params
+            .next()
+            .ok_or("not enough params: arrangement, theta1, kappa1")?
+        {
+            "sym" => (true, BASE_WIDTH - p1_x, p1_y),
+            _ => (
+                false,
+                parse_param(params, "p2_x")?,
+                parse_param(params, "p2_y")?,
+            ),
+        };
+        Ok(AppData {
+            p1: Point::new(p1_x, p1_y),
+            p2: Point::new(p2_x, p2_y),
+            symmetric,
+        })
+    }
+}
+
+impl std::fmt::Display for AppData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let AppData { p1, p2, symmetric } = *self;
+        write!(f, "{},{},", p1.x, p1.y)?;
+        if symmetric {
+            f.write_str("sym")
+        } else {
+            write!(f, "{},{}", p2.x, p2.y)
+        }
+    }
+}
 
 impl Default for AppData {
     fn default() -> Self {

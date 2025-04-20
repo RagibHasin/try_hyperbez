@@ -20,6 +20,18 @@ pub fn as_vec2(v: nalgebra::Vector2<f64>) -> Vec2 {
     Vec2::new(v.x, v.y)
 }
 
+// MARK: Parser
+
+pub fn parse_param<T: std::str::FromStr<Err: std::error::Error + 'static>>(
+    list: &mut std::str::Split<'_, &str>,
+    param: &str,
+) -> Result<T, Box<dyn std::error::Error>> {
+    Ok(list
+        .next()
+        .ok_or(format!("not enough params: {param}"))?
+        .parse()?)
+}
+
 // MARK: Solver
 
 pub fn solve_helper<R>(p1: Point, p2: Point, solve: impl Fn(CubicBez, f64, usize) -> R) -> R {
