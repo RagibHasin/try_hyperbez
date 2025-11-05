@@ -11,16 +11,16 @@ jobs:
     steps:
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: stable
           override: true
           target: wasm32-unknown-unknown
-      - uses: jetli/trunk-action@v0.1.0
-      - uses: jetli/wasm-bindgen-action@v0.1.0
-      - uses: actions/checkout@v2
+      - uses: jetli/trunk-action@v0.5.1
+      - uses: jetli/wasm-bindgen-action@v0.2.0
+      - uses: actions/checkout@v5
       - run: trunk build --release
         env:
           TRUNK_BUILD_PUBLIC_URL: "/try_hyperbez/"
-      - uses: actions/upload-pages-artifact@v2
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: dist
 
@@ -38,5 +38,5 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - uses: actions/deploy-pages@v2
+      - uses: actions/deploy-pages@v4
         id: deployment
