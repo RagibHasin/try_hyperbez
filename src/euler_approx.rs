@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use xilem_web::{
+    core::Edit,
     elements::{
         html::{self, div},
         svg::g,
@@ -29,7 +30,7 @@ pub(crate) struct AppData {
     p2: Point,
 }
 
-type SheetElement = AnyDomView<sheet::State<Handle>, sheet::DragAction<Handle>>;
+type SheetElement = AnyDomView<Edit<sheet::State<Handle>>, sheet::DragAction<Handle>>;
 
 struct MemoizedState {
     hyperbez: hb::Hyperbezier,
@@ -40,9 +41,9 @@ struct MemoizedState {
     frag_cubicbez: Rc<SheetElement>,
     frag_path: Rc<SheetElement>,
     frag_points: Rc<SheetElement>,
-    frag_results_1: Rc<AnyDomView<AppState>>,
-    frag_results_2: Rc<AnyDomView<AppState>>,
-    frag_options: Rc<AnyDomView<AppData>>,
+    frag_results_1: Rc<AnyDomView<Edit<AppState>>>,
+    frag_results_2: Rc<AnyDomView<Edit<AppState>>>,
+    frag_options: Rc<AnyDomView<Edit<AppData>>>,
 }
 
 impl From<AppData> for AppState {
@@ -208,22 +209,22 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let frag_p1_x = labeled_valued(
         ("P1", html::sub("x"), ": "),
         div(()),
-        textbox(data.p1.x).map_state(move |data: &mut AppData| &mut data.p1.x),
+        textbox(data.p1.x).map_state::<Edit<AppData>, _>(|data, ()| &mut data.p1.x),
     );
     let frag_p1_y = labeled_valued(
         ("P1", html::sub("y"), ": "),
         div(()),
-        textbox(data.p1.y).map_state(move |data: &mut AppData| &mut data.p1.y),
+        textbox(data.p1.y).map_state::<Edit<AppData>, _>(|data, ()| &mut data.p1.y),
     );
     let frag_p2_x = labeled_valued(
         ("P2", html::sub("x"), ": "),
         div(()),
-        textbox(data.p2.x).map_state(move |data: &mut AppData| &mut data.p2.x),
+        textbox(data.p2.x).map_state::<Edit<AppData>, _>(|data, ()| &mut data.p2.x),
     );
     let frag_p2_y = labeled_valued(
         ("P2", html::sub("y"), ": "),
         div(()),
-        textbox(data.p2.y).map_state(move |data: &mut AppData| &mut data.p2.y),
+        textbox(data.p2.y).map_state::<Edit<AppData>, _>(|data, ()| &mut data.p2.y),
     );
 
     let frag_options = div((frag_p1_x, frag_p1_y, frag_p2_x, frag_p2_y)).id("options");
@@ -242,7 +243,7 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     }
 }
 
-pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
+pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> {
     let MemoizedState {
         hyperbez,
         theta,
@@ -332,7 +333,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let frag_plots = state
         .plots
         .view(theta, kappa)
-        .map_state(|state: &mut AppState| &mut state.plots);
+        .map_state(|state: &mut AppState, ()| &mut state.plots);
 
     let frag_svg = state
         .sheet
@@ -343,7 +344,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
             hover_mark,
             frag_points.clone(),
         ))
-        .map_state(|state: &mut AppState| &mut state.sheet)
+        .map_state(|state: &mut AppState, ()| &mut state.sheet)
         .map_action(
             move |state: &mut AppState, sheet::DragAction { data, event }| {
                 let p = Affine::FLIP_Y
@@ -365,7 +366,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
             div((
                 frag_options
                     .clone()
-                    .map_state(|state: &mut AppState| &mut state.data),
+                    .map_state(|state: &mut AppState, ()| &mut state.data),
                 frag_results,
             ))
             .id("ui"),

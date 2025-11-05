@@ -3,6 +3,7 @@
 
 use web_sys::MouseEvent;
 use xilem_web::{
+    core::Edit,
     elements::svg::svg,
     interfaces::Element,
     svg::kurbo::{Point, Size, Vec2},
@@ -43,10 +44,10 @@ pub struct DragAction<O = NoData> {
 impl<O> Action for DragAction<O> {}
 
 impl<DragData: Copy + 'static> State<DragData> {
-    pub fn view<Children: DomFragment<Self, DragAction<DragData>>>(
+    pub fn view<Children: DomFragment<Edit<Self>, DragAction<DragData>>>(
         &mut self,
         children: Children,
-    ) -> impl DomView<Self, DragAction<DragData>> {
+    ) -> impl DomView<Edit<Self>, DragAction<DragData>> {
         let sheet_size = self.zoom * self.size;
         svg(children)
             .attr(

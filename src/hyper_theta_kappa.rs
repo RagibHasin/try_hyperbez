@@ -2,6 +2,7 @@ use std::{f64, fmt::Write, rc::Rc};
 
 use wasm_bindgen::JsCast;
 use xilem_web::{
+    core::Edit,
     elements::{
         html::{self, div, option, select},
         svg::g,
@@ -43,7 +44,7 @@ enum Arrangement {
     Free,
 }
 
-type SheetElement = AnyDomView<sheet::State<Handle>, sheet::DragAction<Handle>>;
+type SheetElement = AnyDomView<Edit<sheet::State<Handle>>, sheet::DragAction<Handle>>;
 
 struct MemoizedState {
     hyperbez: hb::Hyperbezier,
@@ -53,8 +54,8 @@ struct MemoizedState {
     frag_controls: Rc<SheetElement>,
     frag_path: Rc<SheetElement>,
     frag_points: Rc<SheetElement>,
-    frag_results: Rc<AnyDomView<AppState>>,
-    frag_options: Rc<AnyDomView<AppData>>,
+    frag_results: Rc<AnyDomView<Edit<AppState>>>,
+    frag_options: Rc<AnyDomView<Edit<AppData>>>,
 }
 
 impl From<AppData> for AppState {
@@ -218,7 +219,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
 
     fn frag_controls(
         data: &AppData,
-    ) -> impl DomView<sheet::State<Handle>, sheet::DragAction<Handle>> {
+    ) -> impl DomView<Edit<sheet::State<Handle>>, sheet::DragAction<Handle>> {
         const CONTROL_LENGTH: f64 = 100.;
         let control0 = Affine::FLIP_Y * (CONTROL_LENGTH * Vec2::from_angle(data.theta0)).to_point();
         let control0 = (
@@ -279,13 +280,13 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
     ))
     .class("results");
 
-    fn frag_options(data: &AppData) -> impl DomView<AppData> {
+    fn frag_options(data: &AppData) -> impl DomView<Edit<AppData>> {
         let frag_theta0 = labeled_valued(
             "θ₀",
             div(()),
             textbox(data.theta0.to_degrees())
-                .map_state(|data: &mut AppData| &mut data.theta0)
-                .map_action(move |data: &mut AppData, _| {
+                .map_state::<Edit<AppData>, _>(|data, ()| &mut data.theta0)
+                .map_action(|data: &mut AppData, _| {
                     data.theta0 = data.theta0.to_radians();
                     data.maintain_arrangement(Handle::Theta0);
                 }),
@@ -294,8 +295,8 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
             "θ₁",
             div(()),
             textbox(data.theta1.to_degrees())
-                .map_state(|data: &mut AppData| &mut data.theta1)
-                .map_action(move |data: &mut AppData, _| {
+                .map_state::<Edit<AppData>, _>(|data, ()| &mut data.theta1)
+                .map_action(|data: &mut AppData, _| {
                     data.theta1 = data.theta1.to_radians();
                     data.maintain_arrangement(Handle::Theta1);
                 }),
@@ -304,15 +305,15 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
             "κ₀",
             div(()),
             textbox(data.kappa0)
-                .map_state(|data: &mut AppData| &mut data.kappa0)
-                .map_action(move |data: &mut AppData, _| data.maintain_arrangement(Handle::Theta0)),
+                .map_state::<Edit<AppData>, _>(|data, ()| &mut data.kappa0)
+                .map_action(|data: &mut AppData, _| data.maintain_arrangement(Handle::Theta0)),
         );
         let frag_kappa1 = labeled_valued(
             "κ₁",
             div(()),
             textbox(data.kappa1)
-                .map_state(|data: &mut AppData| &mut data.kappa1)
-                .map_action(move |data: &mut AppData, _| data.maintain_arrangement(Handle::Theta1)),
+                .map_state::<Edit<AppData>, _>(|data, ()| &mut data.kappa1)
+                .map_action(|data: &mut AppData, _| data.maintain_arrangement(Handle::Theta1)),
         );
 
         let frag_loopy = html::button(if data.loopy {
@@ -379,7 +380,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
     })
 }
 
-pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
+pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> {
     let MemoizedState {
         hyperbez,
         theta,
@@ -466,7 +467,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let frag_plots = state
         .plots
         .view(theta, kappa)
-        .map_state(|state: &mut AppState| &mut state.plots);
+        .map_state(|state: &mut AppState, ()| &mut state.plots);
 
     let frag_svg = state
         .sheet
@@ -476,7 +477,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
             hover_mark,
             frag_points.clone(),
         ))
-        .map_state(|state: &mut AppState| &mut state.sheet)
+        .map_state(|state: &mut AppState, ()| &mut state.sheet)
         .map_action(
             move |state: &mut AppState, sheet::DragAction { data, event }| {
                 let p = Affine::FLIP_Y
@@ -500,7 +501,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
             div((
                 frag_options
                     .clone()
-                    .map_state(|state: &mut AppState| &mut state.data),
+                    .map_state(|state: &mut AppState, ()| &mut state.data),
                 frag_results,
             ))
             .id("ui"),

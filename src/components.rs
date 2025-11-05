@@ -3,6 +3,7 @@
 
 use wasm_bindgen::JsCast;
 use xilem_web::{
+    core::{Edit, ViewArgument},
     elements::html::{div, input, span},
     interfaces::*,
     DomFragment, DomView,
@@ -47,7 +48,7 @@ impl<K: Default, V> Default for Memoized<K, V> {
     }
 }
 
-pub fn slider(value: f64, min: f64, max: f64, step: f64) -> impl DomView<f64> {
+pub fn slider(value: f64, min: f64, max: f64, step: f64) -> impl DomView<Edit<f64>> {
     input(())
         .attr("value", value)
         .attr("type", "range")
@@ -67,7 +68,7 @@ pub fn slider(value: f64, min: f64, max: f64, step: f64) -> impl DomView<f64> {
         })
 }
 
-pub fn textbox(value: f64) -> impl DomView<f64> {
+pub fn textbox(value: f64) -> impl DomView<Edit<f64>> {
     input(())
         .attr("value", format!("{:.1}", value))
         .attr("type", "text")
@@ -84,7 +85,7 @@ pub fn textbox(value: f64) -> impl DomView<f64> {
         })
 }
 
-pub fn labeled_valued<T: 'static>(
+pub fn labeled_valued<T: ViewArgument>(
     label: impl DomFragment<T>,
     edit: impl DomFragment<T>,
     value: impl DomFragment<T>,
@@ -92,7 +93,7 @@ pub fn labeled_valued<T: 'static>(
     (span(label).class("label"), edit, span(value).class("label"))
 }
 
-pub fn spacer<T: 'static>() -> impl DomView<T> {
+pub fn spacer<T: ViewArgument>() -> impl DomView<T> {
     div(()).class("spacer")
 }
 

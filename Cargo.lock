@@ -844,7 +844,7 @@ dependencies = [
 [[package]]
 name = "xilem_core"
 version = "0.4.0"
-source = "git+https://github.com/linebender/xilem.git#d408dd6abf5b963cbf283eb010e439dc62eaea15"
+source = "git+https://github.com/linebender/xilem.git#6c8b86943059d9e12246cc909ac328cff3bf7aa1"
 dependencies = [
  "anymore",
  "hashbrown",
@@ -855,7 +855,7 @@ dependencies = [
 [[package]]
 name = "xilem_web"
 version = "0.4.0"
-source = "git+https://github.com/linebender/xilem.git#d408dd6abf5b963cbf283eb010e439dc62eaea15"
+source = "git+https://github.com/linebender/xilem.git#6c8b86943059d9e12246cc909ac328cff3bf7aa1"
 dependencies = [
  "futures",
  "peniko",

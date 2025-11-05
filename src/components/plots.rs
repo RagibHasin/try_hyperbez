@@ -1,5 +1,6 @@
 use wasm_bindgen::JsCast;
 use xilem_web::{
+    core::Edit,
     elements::{
         html::div,
         svg::{g, svg, text},
@@ -25,14 +26,14 @@ impl Default for State {
 }
 
 impl State {
-    pub fn view(&mut self, theta: &[f64], kappa: &[f64]) -> impl DomView<Self> {
+    pub fn view(&mut self, theta: &[f64], kappa: &[f64]) -> impl DomView<Edit<Self>> {
         let mut plot_size = 1.5 * self.size;
         plot_size.height /= 2.;
         div((
             plot(theta, plot_size, self.hovered_x, "θ (°)")
-                .map_state(|state: &mut Self| &mut state.hovered_x),
+                .map_state(|state: &mut Self, ()| &mut state.hovered_x),
             plot(kappa, plot_size, self.hovered_x, "κ")
-                .map_state(|state: &mut Self| &mut state.hovered_x),
+                .map_state(|state: &mut Self, ()| &mut state.hovered_x),
         ))
         .on_resize(|state: &mut Self, e| {
             state.size.width = e.content_rect().width();
@@ -51,7 +52,7 @@ pub fn plot(
     size: Size,
     hover: Option<f64>,
     caption: &str,
-) -> impl DomView<Option<f64>> {
+) -> impl DomView<Edit<Option<f64>>> {
     let Size { width, height } = size;
     let axis_width = width - 70.;
     let axis_height = height - 40.;
