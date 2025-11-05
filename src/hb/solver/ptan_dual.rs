@@ -52,7 +52,7 @@ fn solve_iterate_once(
     p1_angle: f64,
     guess: Vector5<f64>,
 ) -> (Vector5<f64>, Option<Vector5<f64>>) {
-    let (f, mut jac) = jacobian(system_for_solving(p0_5, phi0_5, theta1, p1_angle), guess);
+    let (f, mut jac) = jacobian(system_for_solving(p0_5, phi0_5, theta1, p1_angle), &guess);
     // jac.transpose_mut();
     // dbg!(&f, &jac);
     let new_guess =
@@ -124,7 +124,7 @@ fn solve_iterate_once_for_ab(
             ));
             Vector2::new(result.w, result.a)
         },
-        guess.xy(),
+        &guess.xy(),
     );
     let new_guess =
         (f.norm_squared().is_finite() && jac.try_inverse_mut()).then(|| guess.xy() - jac * f);
@@ -209,7 +209,7 @@ fn solve_iterate_once_for_cdt(
 
             Vector3::new(p0_5_x_o, p0_5_y_o, phi0_5_o)
         },
-        guess_o,
+        &guess_o,
     );
     let new_guess =
         (f.norm_squared().is_finite() && jac.try_inverse_mut()).then(|| guess_o - jac * f);

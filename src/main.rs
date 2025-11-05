@@ -141,17 +141,17 @@ fn explorer_app(state: &mut Explorer) -> impl DomView<Explorer> {
 }
 
 fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> {
-    let app = explorer_app(&mut state.explorer).adapt(|state: &mut AppState, thunk| {
-        let r = thunk.call(&mut state.explorer);
-        state.data_fragment = state.explorer.to_string();
-        window()
-            .unwrap_throw()
-            .history()
-            .unwrap_throw()
-            .replace_state_with_url(&JsValue::NULL, "", Some(&state.data_fragment))
-            .ok();
-        r
-    });
+    let app = explorer_app(&mut state.explorer)
+        .map_state(|state: &mut AppState| &mut state.explorer)
+        .map_action(|state: &mut AppState, _| {
+            state.data_fragment = state.explorer.to_string();
+            window()
+                .unwrap_throw()
+                .history()
+                .unwrap_throw()
+                .replace_state_with_url(&JsValue::NULL, "", Some(&state.data_fragment))
+                .ok();
+        });
 
     let toolbar = div(select((
         option("HyperParams")

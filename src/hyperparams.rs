@@ -241,30 +241,31 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
 
     let frag_a = labeled_valued(
         "a: ",
-        slider(data.a, -20., 20., 0.2).map_state(move |data: &mut AppData| &mut data.a),
+        slider(data.a, -20., 20., 0.2).map_state(|data: &mut AppData| &mut data.a),
         textbox(data.a).map_state(move |data: &mut AppData| &mut data.a),
     );
     let frag_b = labeled_valued(
         "b: ",
-        slider(data.b, -20., 20., 0.2).map_state(move |data: &mut AppData| &mut data.b),
+        slider(data.b, -20., 20., 0.2).map_state(|data: &mut AppData| &mut data.b),
         textbox(data.b).map_state(move |data: &mut AppData| &mut data.b),
     );
     let frag_c = labeled_valued(
         "c: ",
-        slider(data.c, 0.1, 10., 0.1).adapt(move |data: &mut AppData, thunk| {
-            let mut temp_c = data.c;
-            let r = thunk.call(&mut temp_c);
-            data.c = if temp_c == 0. {
-                if data.c > 0. {
-                    -0.1
-                } else {
-                    0.1
-                }
-            } else {
-                temp_c
-            };
-            r
-        }),
+        slider(data.c, 0.1, 10., 0.1).map_state(|data: &mut AppData| &mut data.c),
+        // .adapt(move |data: &mut AppData, thunk| {
+        //     let mut temp_c = data.c;
+        //     let r = thunk.call(&mut temp_c);
+        //     data.c = if temp_c == 0. {
+        //         if data.c > 0. {
+        //             -0.1
+        //         } else {
+        //             0.1
+        //         }
+        //     } else {
+        //         temp_c
+        //     };
+        //     r
+        // }),
         textbox(data.c).map_state(move |data: &mut AppData| &mut data.c),
     );
     let frag_d_m = labeled_valued(
@@ -437,7 +438,8 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
     let frag_svg = state
         .sheet
         .view((frag_path.clone(), hover_mark, frag_points.clone()))
-        .adapt(move |state: &mut AppState, thunk| thunk.call(&mut state.sheet).map(|_| {}));
+        .map_state(|state: &mut AppState| &mut state.sheet)
+        .map_action(|_, _| ());
 
     div((
         div((

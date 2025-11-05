@@ -270,38 +270,30 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let frag_p1_x = labeled_valued(
         ("P1", html::sub("x"), ": "),
         div(()),
-        textbox(data.p1.x).adapt(move |data: &mut AppData, thunk| {
-            let res = thunk.call(&mut data.p1.x);
-            data.maintain_symmetry(Handle::P1);
-            res
-        }),
+        textbox(data.p1.x)
+            .map_state(|data: &mut AppData| &mut data.p1.x)
+            .map_action(move |data: &mut AppData, _| data.maintain_symmetry(Handle::P1)),
     );
     let frag_p1_y = labeled_valued(
         ("P1", html::sub("y"), ": "),
         div(()),
-        textbox(data.p1.y).adapt(move |data: &mut AppData, thunk| {
-            let res = thunk.call(&mut data.p1.y);
-            data.maintain_symmetry(Handle::P1);
-            res
-        }),
+        textbox(data.p1.y)
+            .map_state(|data: &mut AppData| &mut data.p1.y)
+            .map_action(move |data: &mut AppData, _| data.maintain_symmetry(Handle::P1)),
     );
     let frag_p2_x = labeled_valued(
         ("P2", html::sub("x"), ": "),
         div(()),
-        textbox(data.p2.x).adapt(move |data: &mut AppData, thunk| {
-            let res = thunk.call(&mut data.p2.x);
-            data.maintain_symmetry(Handle::P2);
-            res
-        }),
+        textbox(data.p2.x)
+            .map_state(|data: &mut AppData| &mut data.p2.x)
+            .map_action(move |data: &mut AppData, _| data.maintain_symmetry(Handle::P2)),
     );
     let frag_p2_y = labeled_valued(
         ("P2", html::sub("y"), ": "),
         div(()),
-        textbox(data.p2.y).adapt(move |data: &mut AppData, thunk| {
-            let res = thunk.call(&mut data.p2.y);
-            data.maintain_symmetry(Handle::P2);
-            res
-        }),
+        textbox(data.p2.y)
+            .map_state(|data: &mut AppData| &mut data.p2.y)
+            .map_action(move |data: &mut AppData, _| data.maintain_symmetry(Handle::P2)),
     );
 
     let frag_symmetric = button(if data.symmetric {
@@ -436,22 +428,21 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
             hover_mark,
             frag_points.clone(),
         ))
-        .adapt(move |state: &mut AppState, thunk| {
-            thunk
-                .call(&mut state.sheet)
-                .map(|sheet::DragAction { data, event }| {
-                    let p = Affine::FLIP_Y
-                        * Affine::scale(state.sheet.zoom())
-                            .then_translate(state.sheet.origin().to_vec2())
-                        * Point::new(event.offset_x() as f64, event.offset_y() as f64);
+        .map_state(|state: &mut AppState| &mut state.sheet)
+        .map_action(
+            move |state: &mut AppState, sheet::DragAction { data, event }| {
+                let p = Affine::FLIP_Y
+                    * Affine::scale(state.sheet.zoom())
+                        .then_translate(state.sheet.origin().to_vec2())
+                    * Point::new(event.offset_x() as f64, event.offset_y() as f64);
 
-                    *match data {
-                        Handle::P1 => &mut state.data.p1,
-                        Handle::P2 => &mut state.data.p2,
-                    } = p;
-                    state.data.maintain_symmetry(data);
-                })
-        });
+                *match data {
+                    Handle::P1 => &mut state.data.p1,
+                    Handle::P2 => &mut state.data.p2,
+                } = p;
+                state.data.maintain_symmetry(data);
+            },
+        );
 
     div((
         div((

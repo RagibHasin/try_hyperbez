@@ -42,7 +42,7 @@ fn solve<const ORDER: usize>(
     for i in 0..n_iter {
         let (new_err, mut jac) = jacobian(
             |guess| SVector::from_data(nalgebra::ArrayStorage([f(guess.data.0[0])])),
-            guess,
+            &guess,
         );
 
         tracing::trace!(?guess, ?new_err, ?jac);

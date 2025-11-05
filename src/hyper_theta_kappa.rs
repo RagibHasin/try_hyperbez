@@ -283,40 +283,36 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
         let frag_theta0 = labeled_valued(
             "θ₀",
             div(()),
-            textbox(data.theta0.to_degrees()).adapt(move |data: &mut AppData, thunk| {
-                let res = thunk.call(&mut data.theta0);
-                data.theta0 = data.theta0.to_radians();
-                data.maintain_arrangement(Handle::Theta0);
-                res
-            }),
+            textbox(data.theta0.to_degrees())
+                .map_state(|data: &mut AppData| &mut data.theta0)
+                .map_action(move |data: &mut AppData, _| {
+                    data.theta0 = data.theta0.to_radians();
+                    data.maintain_arrangement(Handle::Theta0);
+                }),
         );
         let frag_theta1 = labeled_valued(
             "θ₁",
             div(()),
-            textbox(data.theta1.to_degrees()).adapt(move |data: &mut AppData, thunk| {
-                let res = thunk.call(&mut data.theta1);
-                data.theta1 = data.theta1.to_radians();
-                data.maintain_arrangement(Handle::Theta1);
-                res
-            }),
+            textbox(data.theta1.to_degrees())
+                .map_state(|data: &mut AppData| &mut data.theta1)
+                .map_action(move |data: &mut AppData, _| {
+                    data.theta1 = data.theta1.to_radians();
+                    data.maintain_arrangement(Handle::Theta1);
+                }),
         );
         let frag_kappa0 = labeled_valued(
             "κ₀",
             div(()),
-            textbox(data.kappa0).adapt(move |data: &mut AppData, thunk| {
-                let res = thunk.call(&mut data.kappa0);
-                data.maintain_arrangement(Handle::Theta0);
-                res
-            }),
+            textbox(data.kappa0)
+                .map_state(|data: &mut AppData| &mut data.kappa0)
+                .map_action(move |data: &mut AppData, _| data.maintain_arrangement(Handle::Theta0)),
         );
         let frag_kappa1 = labeled_valued(
             "κ₁",
             div(()),
-            textbox(data.kappa1).adapt(move |data: &mut AppData, thunk| {
-                let res = thunk.call(&mut data.kappa1);
-                data.maintain_arrangement(Handle::Theta1);
-                res
-            }),
+            textbox(data.kappa1)
+                .map_state(|data: &mut AppData| &mut data.kappa1)
+                .map_action(move |data: &mut AppData, _| data.maintain_arrangement(Handle::Theta1)),
         );
 
         let frag_loopy = html::button(if data.loopy {
@@ -480,25 +476,24 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> {
             hover_mark,
             frag_points.clone(),
         ))
-        .adapt(move |state: &mut AppState, thunk| {
-            thunk
-                .call(&mut state.sheet)
-                .map(|sheet::DragAction { data, event }| {
-                    let p = Affine::FLIP_Y
-                        * Affine::scale(state.sheet.zoom())
-                            .then_translate(state.sheet.origin().to_vec2())
-                        * Point::new(event.offset_x() as f64, event.offset_y() as f64);
+        .map_state(|state: &mut AppState| &mut state.sheet)
+        .map_action(
+            move |state: &mut AppState, sheet::DragAction { data, event }| {
+                let p = Affine::FLIP_Y
+                    * Affine::scale(state.sheet.zoom())
+                        .then_translate(state.sheet.origin().to_vec2())
+                    * Point::new(event.offset_x() as f64, event.offset_y() as f64);
 
-                    match data {
-                        Handle::Theta0 => state.data.theta0 = p.to_vec2().angle(),
-                        Handle::Theta1 => {
-                            state.data.theta1 =
-                                (Point::new(BASE_WIDTH, 0.) - Affine::FLIP_Y * p).angle()
-                        }
-                    };
-                    state.data.maintain_arrangement(data);
-                })
-        });
+                match data {
+                    Handle::Theta0 => state.data.theta0 = p.to_vec2().angle(),
+                    Handle::Theta1 => {
+                        state.data.theta1 =
+                            (Point::new(BASE_WIDTH, 0.) - Affine::FLIP_Y * p).angle()
+                    }
+                };
+                state.data.maintain_arrangement(data);
+            },
+        );
 
     div((
         div((
