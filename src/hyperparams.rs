@@ -12,7 +12,10 @@ use xilem_web::{
     AnyDomView, DomView,
 };
 
-use hyperbez_toy::{utils::parse_param, *};
+use hyperbez_toy::{
+    utils::{parse_param, ViewExt},
+    *,
+};
 
 use crate::components::*;
 
@@ -440,7 +443,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> {
         .sheet
         .view((frag_path.clone(), hover_mark, frag_points.clone()))
         .map_state(|state: &mut AppState, ()| &mut state.sheet)
-        .map_action(|_, _| ());
+        .map_message(|_, r| r.map(|_| ()));
 
     div((
         div((

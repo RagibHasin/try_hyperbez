@@ -12,7 +12,10 @@ use xilem_web::{
     AnyDomView, DomView,
 };
 
-use hyperbez_toy::{utils::parse_param, *};
+use hyperbez_toy::{
+    utils::{parse_param, ViewExt},
+    *,
+};
 
 use crate::components::*;
 
@@ -286,9 +289,10 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
             div(()),
             textbox(data.theta0.to_degrees())
                 .map_state::<Edit<AppData>, _>(|data, ()| &mut data.theta0)
-                .map_action(|data: &mut AppData, _| {
+                .map_message(|data: &mut AppData, r| {
                     data.theta0 = data.theta0.to_radians();
                     data.maintain_arrangement(Handle::Theta0);
+                    r
                 }),
         );
         let frag_theta1 = labeled_valued(
@@ -296,9 +300,10 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
             div(()),
             textbox(data.theta1.to_degrees())
                 .map_state::<Edit<AppData>, _>(|data, ()| &mut data.theta1)
-                .map_action(|data: &mut AppData, _| {
+                .map_message(|data: &mut AppData, r| {
                     data.theta1 = data.theta1.to_radians();
                     data.maintain_arrangement(Handle::Theta1);
+                    r
                 }),
         );
         let frag_kappa0 = labeled_valued(
@@ -306,14 +311,20 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
             div(()),
             textbox(data.kappa0)
                 .map_state::<Edit<AppData>, _>(|data, ()| &mut data.kappa0)
-                .map_action(|data: &mut AppData, _| data.maintain_arrangement(Handle::Theta0)),
+                .map_message(|data: &mut AppData, r| {
+                    data.maintain_arrangement(Handle::Theta0);
+                    r
+                }),
         );
         let frag_kappa1 = labeled_valued(
             "κ₁",
             div(()),
             textbox(data.kappa1)
                 .map_state::<Edit<AppData>, _>(|data, ()| &mut data.kappa1)
-                .map_action(|data: &mut AppData, _| data.maintain_arrangement(Handle::Theta1)),
+                .map_message(|data: &mut AppData, r| {
+                    data.maintain_arrangement(Handle::Theta1);
+                    r
+                }),
         );
 
         let frag_loopy = html::button(if data.loopy {

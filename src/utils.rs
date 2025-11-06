@@ -20,6 +20,40 @@ pub fn as_vec2(v: nalgebra::Vector2<f64>) -> Vec2 {
     Vec2::new(v.x, v.y)
 }
 
+pub trait ViewExt<
+    State: xilem_web::core::ViewArgument,
+    Action,
+    Context: xilem_web::core::ViewPathTracker,
+>: xilem_web::core::View<State, Action, Context>
+{
+    /// See [`map_message`](`core::map_message`)
+    fn map_message<ParentAction, F>(
+        self,
+        f: F,
+    ) -> xilem_web::core::MapMessage<Self, State, ParentAction, Action, Context, F>
+    where
+        ParentAction: 'static,
+        Action: 'static,
+        Self: Sized,
+        F: Fn(
+                xilem_web::core::Arg<'_, State>,
+                xilem_web::core::MessageResult<Action>,
+            ) -> xilem_web::core::MessageResult<ParentAction>
+            + 'static,
+    {
+        xilem_web::core::map_message(self, f)
+    }
+}
+
+impl<
+        State: xilem_web::core::ViewArgument,
+        Action,
+        Context: xilem_web::core::ViewPathTracker,
+        V: xilem_web::core::View<State, Action, Context>,
+    > ViewExt<State, Action, Context> for V
+{
+}
+
 // MARK: Parser
 
 pub fn parse_param<T: std::str::FromStr<Err: std::error::Error + 'static>>(

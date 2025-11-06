@@ -12,6 +12,8 @@ use xilem_web::{
     App, DomFragment, DomView,
 };
 
+use hyperbez_toy::utils::ViewExt;
+
 pub mod components;
 
 mod coprop;
@@ -144,7 +146,7 @@ fn explorer_app(state: &mut Explorer) -> impl DomView<Edit<Explorer>> {
 fn app_logic(state: &mut AppState) -> impl DomFragment<Edit<AppState>> {
     let app = explorer_app(&mut state.explorer)
         .map_state(|state: &mut AppState, ()| &mut state.explorer)
-        .map_action(|state: &mut AppState, _| {
+        .map_message(|state: &mut AppState, r| {
             state.data_fragment = state.explorer.to_string();
             window()
                 .unwrap_throw()
@@ -152,6 +154,7 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<Edit<AppState>> {
                 .unwrap_throw()
                 .replace_state_with_url(&JsValue::NULL, "", Some(&state.data_fragment))
                 .ok();
+            r
         });
 
     let toolbar = div(select((

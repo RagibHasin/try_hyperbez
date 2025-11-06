@@ -11,7 +11,11 @@ use xilem_web::{
     AnyDomView, DomView,
 };
 
-use hyperbez_toy::{hb::solver::coprop_dual, utils::parse_param, *};
+use hyperbez_toy::{
+    hb::solver::coprop_dual,
+    utils::{parse_param, ViewExt},
+    *,
+};
 
 use crate::components::*;
 
@@ -273,28 +277,40 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
         div(()),
         textbox(data.p1.x)
             .map_state::<Edit<AppData>, _>(|data, ()| &mut data.p1.x)
-            .map_action(|data: &mut AppData, _| data.maintain_symmetry(Handle::P1)),
+            .map_message(|data: &mut AppData, r| {
+                data.maintain_symmetry(Handle::P1);
+                r
+            }),
     );
     let frag_p1_y = labeled_valued(
         ("P1", html::sub("y"), ": "),
         div(()),
         textbox(data.p1.y)
             .map_state::<Edit<AppData>, _>(|data, ()| &mut data.p1.y)
-            .map_action(|data: &mut AppData, _| data.maintain_symmetry(Handle::P1)),
+            .map_message(|data: &mut AppData, r| {
+                data.maintain_symmetry(Handle::P1);
+                r
+            }),
     );
     let frag_p2_x = labeled_valued(
         ("P2", html::sub("x"), ": "),
         div(()),
         textbox(data.p2.x)
             .map_state::<Edit<AppData>, _>(|data, ()| &mut data.p2.x)
-            .map_action(|data: &mut AppData, _| data.maintain_symmetry(Handle::P2)),
+            .map_message(|data: &mut AppData, r| {
+                data.maintain_symmetry(Handle::P2);
+                r
+            }),
     );
     let frag_p2_y = labeled_valued(
         ("P2", html::sub("y"), ": "),
         div(()),
         textbox(data.p2.y)
             .map_state::<Edit<AppData>, _>(|data, ()| &mut data.p2.y)
-            .map_action(|data: &mut AppData, _| data.maintain_symmetry(Handle::P2)),
+            .map_message(|data: &mut AppData, r| {
+                data.maintain_symmetry(Handle::P2);
+                r
+            }),
     );
 
     let frag_symmetric = button(if data.symmetric {
