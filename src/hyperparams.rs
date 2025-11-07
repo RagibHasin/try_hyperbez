@@ -36,6 +36,8 @@ pub(crate) struct AppData {
     d_m: f64,
     e: f64,
 
+    old_c: f64,
+
     is_d: bool,
     render_method: RenderMethod,
     accuracy_order: f64,
@@ -93,6 +95,7 @@ impl std::str::FromStr for AppData {
             c,
             d_m: d,
             e,
+            old_c: c,
             is_d: true,
             render_method,
             accuracy_order,
@@ -111,6 +114,7 @@ impl std::fmt::Display for AppData {
             is_d,
             render_method,
             accuracy_order,
+            ..
         } = *self;
         let render = match render_method {
             RenderMethod::UnoptimizedCurveFit => "unopt",
@@ -130,6 +134,7 @@ impl Default for AppData {
             c: -1.,
             d_m: 1.,
             e: 1.,
+            old_c: -1.,
             is_d: true,
             render_method: RenderMethod::UnoptimizedCurveFit,
             accuracy_order: 1.,
@@ -255,21 +260,7 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     );
     let frag_c = labeled_valued(
         "c: ",
-        slider(data.c, 0.1, 10., 0.1).map_state::<Edit<AppData>, _>(|data, ()| &mut data.c),
-        // .adapt(move |data: &mut AppData, thunk| {
-        //     let mut temp_c = data.c;
-        //     let r = thunk.call(&mut temp_c);
-        //     data.c = if temp_c == 0. {
-        //         if data.c > 0. {
-        //             -0.1
-        //         } else {
-        //             0.1
-        //         }
-        //     } else {
-        //         temp_c
-        //     };
-        //     r
-        // }),
+        slider(data.c, -10., 10., 0.1).map_state::<Edit<AppData>, _>(|data, ()| &mut data.c),
         textbox(data.c).map_state::<Edit<AppData>, _>(|data, ()| &mut data.c),
     );
     let frag_d_m = labeled_valued(
@@ -352,6 +343,11 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
 }
 
 pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> {
+    if state.data.c == 0. {
+        state.data.c = state.data.old_c;
+    } else {
+        state.data.old_c = state.data.c;
+    };
     let MemoizedState {
         hyperbez,
         theta,
