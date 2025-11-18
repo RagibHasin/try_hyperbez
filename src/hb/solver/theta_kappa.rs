@@ -1,6 +1,6 @@
 use std::{convert::identity, f64};
 
-use num_dual::{jacobian, DualNum, DualSVec64, DualVec};
+use num_dual::{DualNum, DualSVec64, DualVec, jacobian};
 use num_traits::Signed;
 
 use crate::utils::*;

@@ -6,7 +6,7 @@ use xilem_web::svg::kurbo;
 
 use arrayvec::ArrayVec;
 use kurbo::{
-    common::GAUSS_LEGENDRE_COEFFS_32, CurveFitSample, ParamCurve, ParamCurveFit, Point, Vec2,
+    CurveFitSample, ParamCurve, ParamCurveFit, Point, Vec2, common::GAUSS_LEGENDRE_COEFFS_32,
 };
 use nalgebra::Vector2;
 use num_dual::DualNum;

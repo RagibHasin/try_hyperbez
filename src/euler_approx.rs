@@ -1,14 +1,14 @@
 use std::rc::Rc;
 
 use xilem_web::{
-    core::Edit,
+    AnyDomView, DomView,
+    core::{Edit, View},
     elements::{
         html::{self, div},
         svg::g,
     },
     interfaces::*,
     svg::kurbo::{self, Affine, Circle, Line, ParamCurve, Point, Shape, Vec2},
-    AnyDomView, DomView,
 };
 
 use hyperbez_toy::{utils::parse_param, *};
@@ -243,7 +243,7 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     }
 }
 
-pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> {
+pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> + use<> {
     let MemoizedState {
         hyperbez,
         theta,
@@ -302,7 +302,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> {
         hovered_point.map_or(empty.clone(), |v| format!("{:.2}", v.x)),
     );
     let frag_hovered_p_y = labeled_valued(
-        ("P", html::sub("x"), "(s): "),
+        ("P", html::sub("y"), "(s): "),
         (),
         hovered_point.map_or(empty.clone(), |v| format!("{:.2}", v.y)),
     );

@@ -1,13 +1,13 @@
 use wasm_bindgen::JsCast;
 use xilem_web::{
-    core::Edit,
+    DomView,
+    core::{Edit, View},
     elements::{
         html::div,
         svg::{g, svg, text},
     },
     interfaces::Element,
     svg::kurbo::{Affine, BezPath, Circle, Line, PathEl, Point, Size},
-    DomView,
 };
 
 #[derive(Debug, PartialEq)]
@@ -26,7 +26,7 @@ impl Default for State {
 }
 
 impl State {
-    pub fn view(&mut self, theta: &[f64], kappa: &[f64]) -> impl DomView<Edit<Self>> {
+    pub fn view(&mut self, theta: &[f64], kappa: &[f64]) -> impl DomView<Edit<Self>> + use<> {
         let mut plot_size = 1.5 * self.size;
         plot_size.height /= 2.;
         div((
@@ -52,7 +52,7 @@ pub fn plot(
     size: Size,
     hover: Option<f64>,
     caption: &str,
-) -> impl DomView<Edit<Option<f64>>> {
+) -> impl DomView<Edit<Option<f64>>> + use<> {
     let Size { width, height } = size;
     let axis_width = width - 70.;
     let axis_height = height - 40.;

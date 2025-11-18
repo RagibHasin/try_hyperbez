@@ -3,10 +3,10 @@
 
 use wasm_bindgen::JsCast;
 use xilem_web::{
+    DomFragment, DomView,
     core::{Edit, ViewArgument},
     elements::html::{div, input, span},
     interfaces::*,
-    DomFragment, DomView,
 };
 
 #[derive(Debug)]

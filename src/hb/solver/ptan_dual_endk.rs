@@ -4,7 +4,7 @@ use xilem_web::svg::kurbo;
 
 use kurbo::{Affine, ParamCurve, ParamCurveDeriv, Point};
 use nalgebra::{Vector2, Vector3, Vector5};
-use num_dual::{jacobian, DualNum, DualVec64};
+use num_dual::{DualNum, DualVec64, jacobian};
 
 use crate::utils::*;
 

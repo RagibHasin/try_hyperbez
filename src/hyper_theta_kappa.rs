@@ -2,20 +2,17 @@ use std::{f64, fmt::Write, rc::Rc};
 
 use wasm_bindgen::JsCast;
 use xilem_web::{
-    core::Edit,
+    AnyDomView, DomView,
+    core::{Edit, View},
     elements::{
-        html::{self, div, option, select},
+        html::{self, button, div, option, select},
         svg::g,
     },
     interfaces::*,
     svg::kurbo::{self, Affine, Circle, Line, ParamCurve, Point, Vec2},
-    AnyDomView, DomView,
 };
 
-use hyperbez_toy::{
-    utils::{parse_param, ViewExt},
-    *,
-};
+use hyperbez_toy::{utils::parse_param, *};
 
 use crate::components::*;
 
@@ -222,7 +219,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
 
     fn frag_controls(
         data: &AppData,
-    ) -> impl DomView<Edit<sheet::State<Handle>>, sheet::DragAction<Handle>> {
+    ) -> impl DomView<Edit<sheet::State<Handle>>, sheet::DragAction<Handle>> + use<> {
         const CONTROL_LENGTH: f64 = 100.;
         let control0 = Affine::FLIP_Y * (CONTROL_LENGTH * Vec2::from_angle(data.theta0)).to_point();
         let control0 = (
@@ -283,7 +280,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
     ))
     .class("results");
 
-    fn frag_options(data: &AppData) -> impl DomView<Edit<AppData>> {
+    fn frag_options(data: &AppData) -> impl DomView<Edit<AppData>> + use<> {
         let frag_theta0 = labeled_valued(
             "θ₀",
             div(()),
@@ -327,7 +324,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
                 }),
         );
 
-        let frag_loopy = html::button(if data.loopy {
+        let frag_loopy = button(if data.loopy {
             "Remove loop"
         } else {
             "Create loop"
@@ -361,7 +358,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
             data.maintain_arrangement(Handle::Theta0);
         });
 
-        let frag_running = html::button(if data.running { "Pause" } else { "Resume" })
+        let frag_running = button(if data.running { "Pause" } else { "Resume" })
             .on_click(|data: &mut AppData, _| data.running = !data.running);
 
         div((
@@ -391,7 +388,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
     })
 }
 
-pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> {
+pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> + use<> {
     let MemoizedState {
         hyperbez,
         theta,
@@ -448,7 +445,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> {
         hovered_point.map_or(empty.clone(), |v| format!("{:.2}", v.x)),
     );
     let frag_hovered_p_y = labeled_valued(
-        ("P", html::sub("x"), "(s): "),
+        ("P", html::sub("y"), "(s): "),
         (),
         hovered_point.map_or(empty.clone(), |v| format!("{:.2}", v.y)),
     );

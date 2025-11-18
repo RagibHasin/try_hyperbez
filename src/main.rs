@@ -4,15 +4,12 @@
 use wasm_bindgen::prelude::*;
 use web_sys::window;
 use xilem_web::{
+    App, DomFragment, DomView,
     concurrent::task,
-    core::Edit,
-    core::{fork, one_of::OneOf5},
+    core::{Edit, View, fork, one_of::OneOf5},
     elements::html::{div, option, select},
     interfaces::{Element, HtmlOptionElement},
-    App, DomFragment, DomView,
 };
-
-use hyperbez_toy::utils::ViewExt;
 
 pub mod components;
 
@@ -93,7 +90,7 @@ impl From<Explorer> for AppState {
     }
 }
 
-fn explorer_app(state: &mut Explorer) -> impl DomView<Edit<Explorer>> {
+fn explorer_app(state: &mut Explorer) -> impl DomView<Edit<Explorer>> + use<> {
     match state {
         Explorer::HyperParams(state) => OneOf5::A(hyperparams::app_logic(state).map_state(
             |state: &mut Explorer, ()| {
@@ -143,7 +140,7 @@ fn explorer_app(state: &mut Explorer) -> impl DomView<Edit<Explorer>> {
     }
 }
 
-fn app_logic(state: &mut AppState) -> impl DomFragment<Edit<AppState>> {
+fn app_logic(state: &mut AppState) -> impl DomFragment<Edit<AppState>> + use<> {
     let app = explorer_app(&mut state.explorer)
         .map_state(|state: &mut AppState, ()| &mut state.explorer)
         .map_message(|state: &mut AppState, r| {
@@ -207,12 +204,11 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<Edit<AppState>> {
                     std::mem::forget(callback);
                 },
                 |state: &mut AppState, _: ()| {
-                    if let Ok(url_fragment) = window().unwrap_throw().location().hash() {
-                        if state.data_fragment != url_fragment
-                            && state.explorer.try_update(&url_fragment).is_ok()
-                        {
-                            state.data_fragment = url_fragment;
-                        }
+                    if let Ok(url_fragment) = window().unwrap_throw().location().hash()
+                        && state.data_fragment != url_fragment
+                        && state.explorer.try_update(&url_fragment).is_ok()
+                    {
+                        state.data_fragment = url_fragment;
                     }
                 },
             ),
@@ -223,7 +219,7 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<Edit<AppState>> {
 
 pub fn main() {
     use tracing_subscriber::{fmt::format::Pretty, prelude::*};
-    use tracing_web::{performance_layer, MakeWebConsoleWriter};
+    use tracing_web::{MakeWebConsoleWriter, performance_layer};
 
     console_error_panic_hook::set_once();
 

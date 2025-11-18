@@ -2,20 +2,17 @@ use std::{ops::Range, rc::Rc};
 
 use wasm_bindgen::JsCast;
 use xilem_web::{
-    core::Edit,
+    AnyDomView, DomView,
+    core::{Edit, View},
     elements::{
         html::{self, div, option, select},
         svg::g,
     },
     interfaces::*,
     svg::kurbo::{self, Affine, Circle, Line, ParamCurve, Point, Vec2},
-    AnyDomView, DomView,
 };
 
-use hyperbez_toy::{
-    utils::{parse_param, ViewExt},
-    *,
-};
+use hyperbez_toy::{utils::parse_param, *};
 
 use crate::components::*;
 
@@ -342,7 +339,7 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     }
 }
 
-pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> {
+pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> + use<> {
     if state.data.c == 0. {
         state.data.c = state.data.old_c;
     } else {
@@ -403,7 +400,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> {
         hovered_point.map_or(empty.clone(), |v| format!("{:.2}", v.x)),
     );
     let frag_hovered_p_y = labeled_valued(
-        ("P", html::sub("x"), "(s): "),
+        ("P", html::sub("y"), "(s): "),
         (),
         hovered_point.map_or(empty.clone(), |v| format!("{:.2}", v.y)),
     );
