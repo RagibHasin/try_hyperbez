@@ -19,17 +19,17 @@ pub struct HyperbezParams<D> {
     b: D,
     c: D,
     d: D,
-    e: D,
 
-    num0_e_sqrt: D,
+    num0: D,
     num1: D,
 }
 
 impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
     /// Create a new hyperbezier with the given parameters.
-    pub fn new(a: D, b: D, c: D, d: D, e: D) -> Self {
-        let denom = D::from(2.) / (c * e * 4. - d * d);
-        let num0_e_sqrt = b * d * denom - a * e * 2. * denom;
+    pub fn new(a: D, b: D, c: D, d: D) -> Self {
+        let denom = D::from(2.) / (c * 4. - d * d);
+        let beta0 = d * denom;
+        let num0 = a * (-d * beta0 * 0.5 - 1.) / c + b * beta0;
         let num1 = (b * c * 2. - d * a) * denom;
 
         HyperbezParams {
@@ -37,22 +37,21 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
             b,
             c,
             d,
-            e,
-            num0_e_sqrt,
+            num0,
             num1,
         }
     }
 
     pub fn new_with_endk_ln(a: D, b: D, l0: D, l1: D) -> Self {
-        let [c, d, e] = Self::quadratic_for_endk_ln(l0, l1);
-        Self::new(a, b, c, d, e)
+        let [c, d] = Self::quadratic_for_endk(l0, l1);
+        Self::new(a, b, c, d)
     }
 
     fn int_helper(&self, t: D) -> D {
         if self.c.is_zero() && self.d.is_zero() {
             self.a * t.powi(2) * 0.5 + self.b * t
         } else {
-            (self.num0_e_sqrt + self.num1 * t) / self.q(t).sqrt()
+            (self.num0 + self.num1 * t) / self.q(t).sqrt()
         }
     }
 
@@ -65,7 +64,7 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
         if self.c.is_zero() && self.d.is_zero() {
             self.int_helper(t)
         } else {
-            self.int_helper(t) - self.num0_e_sqrt / self.e.sqrt()
+            self.int_helper(t) - self.num0
         }
     }
 
@@ -82,7 +81,7 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
     }
 
     pub fn q(&self, t: D) -> D {
-        self.c * t * t + self.d * t + self.e
+        self.c * t * t + self.d * t + D::from(1.)
     }
 
     pub fn kappa_extrema(&self) -> ArrayVec<D, 2> {
@@ -101,7 +100,7 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
         let b = self.b;
         let c = self.c;
         let d = self.d;
-        let e = self.e;
+        let e = D::from(1.);
 
         match (a.re() == 0., c.re() == 0.) {
             (true, true) => ArrayVec::new(),
@@ -216,7 +215,8 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
         let c = -(c0 + c1) * (c0 + c1);
         let d = c0 * (c0 + c1) * 2.;
         let e = -c0 * c0 + 1.;
-        HyperbezParams::new(a, b, c, d, e)
+        let e32 = e * e.sqrt();
+        HyperbezParams::new(a / e32, b / e32, c / e, d / e)
     }
 
     /// Returns [θ0, θ1]
@@ -234,8 +234,10 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
         let b = self.b + self.a * t0;
         let c = self.c * dt * dt;
         let d = (self.d + self.c * t0 * 2.) * dt;
-        let e = self.c * t0 * t0 + self.d * t0 + self.e;
-        HyperbezParams::new(a * dt, b * dt, c, d, e)
+        let e = self.c * t0 * t0 + self.d * t0 + 1.;
+        let s = D::from(1.) / e;
+        let ps = dt * s * s.sqrt();
+        HyperbezParams::new(a * ps, b * ps, c * s, d * s)
     }
 
     pub fn k_for_tension(t: D) -> D {
@@ -293,11 +295,8 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
     pub fn d(&self) -> D {
         self.d
     }
-    pub fn e(&self) -> D {
-        self.e
-    }
     pub fn num0(&self) -> D {
-        self.num0_e_sqrt
+        self.num0
     }
     pub fn num1(&self) -> D {
         self.num1
@@ -491,11 +490,11 @@ pub fn solve_quadratic(c0: f64, c1: f64, c2: f64) -> ArrayVec<f64, 2> {
 }
 
 /// Returns [a, b]
-pub fn solve_thetas(th0: f64, th1: f64, c: f64, d: f64, e: f64) -> [f64; 2] {
+pub fn solve_thetas(th0: f64, th1: f64, c: f64, d: f64) -> [f64; 2] {
     let mut a = 0.;
     let mut b = 0.;
     for _ in 0..10 {
-        let ths = HyperbezParams::new(a, b, c, d, e).calc_thetas();
+        let ths = HyperbezParams::new(a, b, c, d).calc_thetas();
         let dth0 = ths[0] - th0;
         let dth1 = ths[1] - th1;
         if dth0.abs() < 1e-9 && dth1.abs() < 1e-1 {
@@ -503,10 +502,10 @@ pub fn solve_thetas(th0: f64, th1: f64, c: f64, d: f64, e: f64) -> [f64; 2] {
         }
         const EPS: f64 = 1e-6;
         const IEPS: f64 = 0.5 / EPS;
-        let tap = HyperbezParams::new(a + EPS, b, c, d, e).calc_thetas();
-        let tam = HyperbezParams::new(a - EPS, b, c, d, e).calc_thetas();
-        let tbp = HyperbezParams::new(a, b + EPS, c, d, e).calc_thetas();
-        let tbm = HyperbezParams::new(a, b - EPS, c, d, e).calc_thetas();
+        let tap = HyperbezParams::new(a + EPS, b, c, d).calc_thetas();
+        let tam = HyperbezParams::new(a - EPS, b, c, d).calc_thetas();
+        let tbp = HyperbezParams::new(a, b + EPS, c, d).calc_thetas();
+        let tbm = HyperbezParams::new(a, b - EPS, c, d).calc_thetas();
         let dth0da = IEPS * (tap[0] - tam[0]);
         let dth1da = IEPS * (tap[1] - tam[1]);
         let dth0db = IEPS * (tbp[0] - tbm[0]);
@@ -566,7 +565,7 @@ mod tests {
     #[test]
     #[test_log(default_log_filter = "trace")]
     fn test1() {
-        let hb = HyperbezParams::new(0., -1., -1., 1., 1.);
+        let hb = HyperbezParams::new(0., -1., -1., 1.);
         let seg0 = hb.subsegment(0.0..0.5);
         let seg1 = hb.subsegment(0.5..1.);
         tracing::trace!(?seg0, ?seg1);
@@ -580,7 +579,6 @@ mod tests {
             -0.004213609035097804,
             15.592889809259216,
             -7.892748222945392,
-            1.,
         );
         let extrema = hb.kappa_extrema();
         let seg0 = hb.subsegment(0.0..0.5);
@@ -591,7 +589,7 @@ mod tests {
     #[test]
     #[test_log(default_log_filter = "trace")]
     fn test3() {
-        let hb = HyperbezParams::new(8.2, -6., 3.4, -3.4, 1.);
+        let hb = HyperbezParams::new(8.2, -6., 3.4, -3.4);
         let extrema = hb.kappa_extrema();
         let seg0 = hb.subsegment(0.0..0.5);
         let seg1 = hb.subsegment(0.5..1.);
@@ -601,7 +599,7 @@ mod tests {
     #[test]
     #[test_log(default_log_filter = "trace")]
     fn test4() {
-        let hb = HyperbezParams::new(0., -1., -1., 1., 1.1);
+        let hb = HyperbezParams::new(0., -3f64.sqrt() / 2., -0.9, 0.9);
         let extrema = hb.kappa_extrema();
         tracing::trace!(?extrema);
     }

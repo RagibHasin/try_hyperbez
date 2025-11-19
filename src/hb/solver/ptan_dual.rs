@@ -23,7 +23,7 @@ fn system_for_solving<D: DualNum<f64> + Copy>(
         let d = guess.w;
         let t = guess.a;
 
-        let hb = HyperbezParams::new(a, b, c, d, D::from(1.));
+        let hb = HyperbezParams::new(a, b, c, d);
 
         let p1 = hb.integrate(D::from(1.));
         let p1_hypot = (p1.y.powi(2) + p1.x.powi(2)).sqrt();
@@ -315,7 +315,7 @@ pub fn solve_inferring_full(cb: kurbo::CubicBez, threshold: f64, n_iter: usize) 
         // guess[1] = make_guess_b(guess[2], guess[3], theta1, theta0);
         tracing::trace!(?guess);
 
-        let hb = HyperbezParams::new(guess[0], guess[1], guess[2], guess[3], 1.);
+        let hb = HyperbezParams::new(guess[0], guess[1], guess[2], guess[3]);
         let p1_r = hb.integrate(1.);
         let p1_angle_r = p1_r.y.atan2(p1_r.x);
         let theta1_r = hb.theta(1.);

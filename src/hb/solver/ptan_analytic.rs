@@ -51,8 +51,8 @@ impl HyperbezParams<f64> {
         //console.log('dc', dc, 'c', cd.c, 'd', cd.d);
         // let endk = endk_for_quadratic(c, d);
         // console.log(dc, k0, k1, blend);
-        let [a, b] = solve_thetas(th0, th1, c, d, 1.);
-        HyperbezParams::new(a, b, c, d, 1.)
+        let [a, b] = solve_thetas(th0, th1, c, d);
+        HyperbezParams::new(a, b, c, d)
     }
 
     fn denom(&self) -> f64 {
@@ -71,7 +71,7 @@ impl HyperbezParams<f64> {
 
     pub fn dtheta_dc(&self, t: f64) -> f64 {
         let denom = self.denom();
-        let term1 = 2. * self.num0_e_sqrt * denom;
+        let term1 = 2. * self.num0 * denom;
         let term2 = -self.int_helper(t) * t.powi(2) / (2. * self.q(t));
         let term3 = 2. * denom * (-self.int_helper(t) + self.b * t / self.q(t).sqrt());
         term1 + term2 + term3
@@ -79,7 +79,7 @@ impl HyperbezParams<f64> {
 
     pub fn dtheta_dd(&self, t: f64) -> f64 {
         let denom = self.denom();
-        let term1 = -self.d * self.num0_e_sqrt * denom;
+        let term1 = -self.d * self.num0 * denom;
         let term2 = -self.b * denom;
         let term3 = -self.int_helper(t) * t / (2. * self.q(t));
         let term4 =
@@ -174,7 +174,7 @@ impl HyperbezParams<f64> {
         p1_angle_i: f64,
     ) -> impl Fn([f64; 5]) -> ([f64; 5], [[f64; 5]; 5]) {
         move |[a, b, c, d, t]: [f64; 5]| -> ([f64; 5], [[f64; 5]; 5]) {
-            let hb = HyperbezParams::new(a, b, c, d, 1.);
+            let hb = HyperbezParams::new(a, b, c, d);
 
             let p1 = as_vec2(hb.integrate(1.));
             let p1_hypot = p1.hypot();

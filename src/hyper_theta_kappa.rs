@@ -254,7 +254,6 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
     let frag_b = labeled_valued("b: ", (), format!("{:.3}", params.b()));
     let frag_c = labeled_valued("c: ", (), format!("{:.3}", params.c()));
     let frag_d = labeled_valued("d: ", (), format!("{:.3}", params.d()));
-    let frag_e = labeled_valued("e: ", (), format!("{:.3}", params.e()));
 
     let frag_arclen = labeled_valued("S / b: ", (), format!("{:.3}", arclen));
 
@@ -271,7 +270,6 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
         frag_b,
         frag_c,
         frag_d,
-        frag_e,
         spacer(),
         frag_k0,
         frag_k1,

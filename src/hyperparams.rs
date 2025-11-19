@@ -31,7 +31,6 @@ pub(crate) struct AppData {
     b: f64,
     c: f64,
     d_m: f64,
-    e: f64,
 
     old_c: f64,
 
@@ -78,7 +77,6 @@ impl std::str::FromStr for AppData {
         let b = parse_param(params, "b")?;
         let c = parse_param(params, "c")?;
         let d = parse_param(params, "d")?;
-        let e = parse_param(params, "e")?;
         let render_method = match params.next().ok_or("not enough params: render_option")? {
             "unopt" => RenderMethod::UnoptimizedCurveFit,
             "opt" => RenderMethod::OptimizedCurveFit,
@@ -91,7 +89,6 @@ impl std::str::FromStr for AppData {
             b,
             c,
             d_m: d,
-            e,
             old_c: c,
             is_d: true,
             render_method,
@@ -107,7 +104,6 @@ impl std::fmt::Display for AppData {
             b,
             c,
             d_m,
-            e,
             is_d,
             render_method,
             accuracy_order,
@@ -119,7 +115,7 @@ impl std::fmt::Display for AppData {
             RenderMethod::SubdivisionSolve => "subdiv",
         };
         let d = d_m * if is_d { 1. } else { c };
-        write!(f, "{a},{b},{c},{d},{e},{render},{accuracy_order}",)
+        write!(f, "{a},{b},{c},{d},{render},{accuracy_order}",)
     }
 }
 
@@ -130,7 +126,6 @@ impl Default for AppData {
             b: -1.,
             c: -1.,
             d_m: 1.,
-            e: 1.,
             old_c: -1.,
             is_d: true,
             render_method: RenderMethod::UnoptimizedCurveFit,
@@ -166,7 +161,7 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
 
     let d = data.d_m * if data.is_d { 1. } else { data.c };
     let hyperbez = hb::Hyperbezier::from_points_params(
-        hb::HyperbezParams::new(data.a, data.b, data.c, d, data.e),
+        hb::HyperbezParams::new(data.a, data.b, data.c, data.d_m),
         Point::ZERO,
         Point::new(BASE_WIDTH, 0.),
     );
@@ -272,11 +267,6 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
         .map_state::<Edit<AppData>, _>(|data, ()| &mut data.d_m),
         textbox(data.d_m).map_state::<Edit<AppData>, _>(|data, ()| &mut data.d_m),
     );
-    let frag_e = labeled_valued(
-        "e: ",
-        slider(data.e, 0.1, 20., 0.1).map_state::<Edit<AppData>, _>(|data, ()| &mut data.e),
-        textbox(data.e).map_state::<Edit<AppData>, _>(|data, ()| &mut data.e),
-    );
 
     let frag_render_method = select((
         option("Unoptimized Curve Fitting")
@@ -321,7 +311,6 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
         frag_b,
         frag_c,
         frag_d_m,
-        frag_e,
         spacer(),
         frag_render_method,
         frag_accuracy,

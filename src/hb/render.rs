@@ -228,7 +228,7 @@ mod tests {
     #[test]
     #[test_log(default_log_filter = "trace")]
     fn test1() {
-        let hb = HyperbezParams::new(0., -1., -1., 1., 1.);
+        let hb = HyperbezParams::new(0., -1., -1., 1.);
         let res = hb.render_to_cubic(1e-3);
         tracing::trace!(?res);
     }
@@ -236,7 +236,7 @@ mod tests {
     #[test]
     #[test_log(default_log_filter = "trace")]
     fn test2() {
-        let hb = HyperbezParams::new(0., -2., -1., 1., 1.);
+        let hb = HyperbezParams::new(0., -2., -1., 1.);
         let res = hb.render_to_cubic(1e-3);
         tracing::trace!(?res);
     }
@@ -244,7 +244,7 @@ mod tests {
     #[test]
     #[test_log(default_log_filter = "trace")]
     fn test2_2() {
-        let hb = HyperbezParams::new(0., -2., -1., 1., 1.);
+        let hb = HyperbezParams::new(0., -2., -1., 1.);
         let path = hb.render(1e-3).to_svg();
         tracing::trace!(%path);
     }

@@ -23,7 +23,7 @@ fn system_for_solving<D: DualNum<f64> + Copy>(
         let d = guess.w;
         let t = guess.a;
 
-        let hb = HyperbezParams::new(a, b, c, d, D::from(1.));
+        let hb = HyperbezParams::new(a, b, c, d);
 
         let p1 = hb.integrate(D::from(1.));
         let p1_hypot = (p1.y.powi(2) + p1.x.powi(2)).sqrt();
@@ -356,7 +356,7 @@ pub fn make_hyperbez(cb: kurbo::CubicBez) -> HyperbezParams<f64> {
         let b = kappa0;
         let c = 4. - 2. * (kappa0 + kappa1) / traversed_theta;
         let d = -c;
-        return HyperbezParams::new(a, b, c, d, 1.);
+        return HyperbezParams::new(a, b, c, d);
     }
 
     let guess_c = {
@@ -376,7 +376,7 @@ pub fn make_hyperbez(cb: kurbo::CubicBez) -> HyperbezParams<f64> {
     tracing::trace!(m, ?guess_a, ?guess_c, ?guess_d);
 
     let [a, b, c, d] = [guess_a[0], kappa0, guess_c[0], guess_d[0]];
-    HyperbezParams::new(a, b, c, d, 1.)
+    HyperbezParams::new(a, b, c, d)
 }
 
 #[allow(unused_must_use, unused)]

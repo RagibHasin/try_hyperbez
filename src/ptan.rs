@@ -171,13 +171,8 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
         11,
         hb::solver::ptan_dual::solve_inferring_full,
     );
-    let params = hb::HyperbezParams::new(
-        raw_params[0],
-        raw_params[1],
-        raw_params[2],
-        raw_params[3],
-        1.,
-    );
+    let params =
+        hb::HyperbezParams::new(raw_params[0], raw_params[1], raw_params[2], raw_params[3]);
     let hyperbez = hb::Hyperbezier::from_points_params(params, p0, p3);
 
     // {
@@ -245,7 +240,6 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let frag_b = labeled_valued("b: ", (), format!("{:.3}", params.b()));
     let frag_c = labeled_valued("c: ", (), format!("{:.3}", params.c()));
     let frag_d = labeled_valued("d: ", (), format!("{:.3}", params.d()));
-    let frag_e = labeled_valued("e: ", (), format!("{:.3}", params.e()));
 
     let [k0, k1] = params.endk();
     let frag_k0 = labeled_valued("k₀: ", (), format!("{k0:.3}"));
@@ -258,17 +252,8 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let frag_kappa1 = labeled_valued("κ₁: ", (), format!("{:.3}", kappa1));
     let frag_n_points = labeled_valued("n: ", (), n_points);
 
-    let frag_results_1 = div((
-        frag_a,
-        frag_b,
-        frag_c,
-        frag_d,
-        frag_e,
-        spacer(),
-        frag_k0,
-        frag_k1,
-    ))
-    .class("results");
+    let frag_results_1 =
+        div((frag_a, frag_b, frag_c, frag_d, spacer(), frag_k0, frag_k1)).class("results");
     let frag_results_2 = div((
         frag_arclen,
         spacer(),

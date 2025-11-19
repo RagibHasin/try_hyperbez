@@ -84,7 +84,7 @@ pub fn make_hyperbez(
 
     // straight-line
     if theta0.abs() < f64::EPSILON && inner_theta1.abs() < f64::EPSILON {
-        return HyperbezParams::new(0., 0., -1., 1., 1.);
+        return HyperbezParams::new(0., 0., -1., 1.);
     }
 
     let b = kappa0;
@@ -104,7 +104,7 @@ pub fn make_hyperbez(
         let c = 4. - 2. * (kappa0 + kappa1) / traversed_theta;
         let d = -c;
         tracing::trace!(c, "Symmetric");
-        return HyperbezParams::new(a, b, c, d, 1.);
+        return HyperbezParams::new(a, b, c, d);
     }
 
     // antisymmetric
@@ -121,7 +121,7 @@ pub fn make_hyperbez(
                 let d = -c;
 
                 let dual_1 = DualVec::from(1.);
-                let hb = HyperbezParams::new(DualVec::from(a), DualVec::from(b), c, d, dual_1);
+                let hb = HyperbezParams::new(DualVec::from(a), DualVec::from(b), c, d);
 
                 let p1 = hb.integrate(dual_1);
                 let p1_angle = p1.y.atan2(p1.x);
@@ -141,7 +141,7 @@ pub fn make_hyperbez(
             ) => guess.x,
         };
         let d = -c;
-        let hb = HyperbezParams::new(a, b, c, d, 1.);
+        let hb = HyperbezParams::new(a, b, c, d);
         let theta0_5 = (theta0_5 + theta0).to_degrees();
         let theta0_5_act = (hb.theta(0.5) + theta0).to_degrees();
         tracing::trace!(theta0_5, theta0_5_act);
@@ -262,7 +262,7 @@ pub fn make_hyperbez(
 
             let b = b.into();
             let c = calc_c(a, b, d, traversed_theta);
-            let hb = HyperbezParams::new(a, b, c, d, dual_1);
+            let hb = HyperbezParams::new(a, b, c, d);
 
             let p1 = hb.integrate(dual_1);
             let p1_angle = p1.y.atan2(p1.x);
@@ -285,7 +285,7 @@ pub fn make_hyperbez(
     };
     let c = calc_c(a, b, d, traversed_theta);
     // let [a, b, c, d] = [guess_a[0], kappa0, guess_c[0], guess_d[0]];
-    HyperbezParams::new(a, b, c, d, 1.)
+    HyperbezParams::new(a, b, c, d)
 }
 
 #[allow(unused_must_use)]
