@@ -100,16 +100,15 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
         let b = self.b;
         let c = self.c;
         let d = self.d;
-        let e = D::from(1.);
 
         match (a.re() == 0., c.re() == 0.) {
             (true, true) => ArrayVec::new(),
             (true, false) => filter_and_collect([-d / c * 0.5]),
-            (false, true) => filter_and_collect([(a * e * 2. - b * d * 3.) / (a * d)]),
+            (false, true) => filter_and_collect([(a * 2. - b * d * 3.) / (a * d)]),
             (false, false) => {
                 let quad_a = -a * c * 4.;
                 let quad_b = -a * d - b * c * 6.;
-                let quad_c = a * e * 2. - b * d * 3.;
+                let quad_c = a * 2. - b * d * 3.;
                 let det = (quad_b.powi(2) - quad_a * quad_c * 4.).sqrt();
                 if !det.re().is_finite() {
                     return ArrayVec::new();
@@ -139,7 +138,6 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
     // }
 
     fn integrate_any<R: std::ops::Add<Output = R> + std::ops::Mul<D, Output = R>>(
-        &self,
         f: impl Fn(D) -> R,
         init: R,
         t: D,
@@ -161,7 +159,7 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
     pub fn integrate(&self, t: D) -> Vector2<D> {
         let zero = Vector2::new(D::from(0.), D::from(0.));
 
-        // self.integrate_any(
+        // Self::integrate_any(
         //     |u| {
         //         let (y, x) = self.theta(u).sin_cos();
         //         Vector2::new(x, y)
@@ -171,7 +169,7 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
         // )
 
         let integrate_self = |end_t| {
-            self.integrate_any(
+            Self::integrate_any(
                 |u| {
                     let (y, x) = self.theta(u).sin_cos();
                     Vector2::new(x, y)
@@ -185,7 +183,7 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
             let theta_w0 = self.theta(w0);
             let subseg = self.subsegment(w0..w1);
             let dw = w1 - w0;
-            subseg.integrate_any(
+            Self::integrate_any(
                 |u| {
                     let (y, x) = (theta_w0 + subseg.theta(u)).sin_cos();
                     Vector2::new(x, y)

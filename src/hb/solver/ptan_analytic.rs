@@ -120,23 +120,23 @@ impl HyperbezParams<f64> {
     }
 
     // pub fn dp_da(&self, t: f64) -> Vec2 {
-    //     self.integrate_any(|t| Vec2::new(self.dx_da(t), self.dy_da(t)), Vec2::ZERO, t)
+    //     Self::integrate_any(|t| Vec2::new(self.dx_da(t), self.dy_da(t)), Vec2::ZERO, t)
     // }
 
     // pub fn dp_db(&self, t: f64) -> Vec2 {
-    //     self.integrate_any(|t| Vec2::new(self.dx_db(t), self.dy_db(t)), Vec2::ZERO, t)
+    //     Self::integrate_any(|t| Vec2::new(self.dx_db(t), self.dy_db(t)), Vec2::ZERO, t)
     // }
 
     // pub fn dp_dc(&self, t: f64) -> Vec2 {
-    //     self.integrate_any(|t| Vec2::new(self.dx_dc(t), self.dy_da(t)), Vec2::ZERO, t)
+    //     Self::integrate_any(|t| Vec2::new(self.dx_dc(t), self.dy_da(t)), Vec2::ZERO, t)
     // }
 
     // pub fn dp_dd(&self, t: f64) -> Vec2 {
-    //     self.integrate_any(|t| Vec2::new(self.dx_dd(t), self.dy_da(t)), Vec2::ZERO, t)
+    //     Self::integrate_any(|t| Vec2::new(self.dx_dd(t), self.dy_da(t)), Vec2::ZERO, t)
     // }
 
     pub fn dp_da(&self, t: f64) -> Vec2 {
-        self.integrate_any(
+        Self::integrate_any(
             |t| self.dtheta_da(t) * Vec2::from_angle(self.theta(t) + PI_2),
             Vec2::ZERO,
             t,
@@ -144,7 +144,7 @@ impl HyperbezParams<f64> {
     }
 
     pub fn dp_db(&self, t: f64) -> Vec2 {
-        self.integrate_any(
+        Self::integrate_any(
             |t| self.dtheta_db(t) * Vec2::from_angle(self.theta(t) + PI_2),
             Vec2::ZERO,
             t,
@@ -152,7 +152,7 @@ impl HyperbezParams<f64> {
     }
 
     pub fn dp_dc(&self, t: f64) -> Vec2 {
-        self.integrate_any(
+        Self::integrate_any(
             |t| self.dtheta_dc(t) * Vec2::from_angle(self.theta(t) + PI_2),
             Vec2::ZERO,
             t,
@@ -160,7 +160,7 @@ impl HyperbezParams<f64> {
     }
 
     pub fn dp_dd(&self, t: f64) -> Vec2 {
-        self.integrate_any(
+        Self::integrate_any(
             |t| self.dtheta_dd(t) * Vec2::from_angle(self.theta(t) + PI_2),
             Vec2::ZERO,
             t,
