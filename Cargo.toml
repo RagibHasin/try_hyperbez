@@ -19,7 +19,7 @@ web-sys = { version = "0.3.82", features = [
   "Location",
   "PopStateEvent",
 ] }
-xilem_web = { git = "https://github.com/linebender/xilem.git", rev = "c44e94b6" }
+xilem_web = { git = "https://github.com/linebender/xilem.git", rev = "11e59fd0ceefc0909cc46c605ed04036390c97ce" }
 
 [dev-dependencies]
 test-log = { version = "0.2.18", default-features = false, features = [

@@ -801,7 +801,7 @@ dependencies = [
 [[package]]
 name = "xilem_core"
 version = "0.4.0"
-source = "git+https://github.com/linebender/xilem.git?rev=c44e94b6#c44e94b6139f794268a23355b525985ab597db98"
+source = "git+https://github.com/linebender/xilem.git?rev=11e59fd0ceefc0909cc46c605ed04036390c97ce#11e59fd0ceefc0909cc46c605ed04036390c97ce"
 dependencies = [
  "anymore",
  "hashbrown",
@@ -812,7 +812,7 @@ dependencies = [
 [[package]]
 name = "xilem_web"
 version = "0.4.0"
-source = "git+https://github.com/linebender/xilem.git?rev=c44e94b6#c44e94b6139f794268a23355b525985ab597db98"
+source = "git+https://github.com/linebender/xilem.git?rev=11e59fd0ceefc0909cc46c605ed04036390c97ce#11e59fd0ceefc0909cc46c605ed04036390c97ce"
 dependencies = [
  "futures-channel",
  "futures-util",
