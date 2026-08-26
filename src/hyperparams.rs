@@ -3,7 +3,7 @@ use std::{ops::Range, rc::Rc};
 use wasm_bindgen::JsCast;
 use xilem_web::{
     AnyDomView, DomView,
-    core::{Edit, View},
+    core::View,
     elements::{
         html::{self, div, option, select},
         svg::g,
@@ -51,10 +51,10 @@ struct MemoizedState {
     theta: Rc<[f64]>,
     kappa: Rc<[f64]>,
 
-    frag_path: Rc<AnyDomView<Edit<sheet::State>, sheet::DragAction>>,
-    frag_points: Rc<AnyDomView<Edit<sheet::State>, sheet::DragAction>>,
-    frag_results: Rc<AnyDomView<Edit<AppState>>>,
-    frag_options: Rc<AnyDomView<Edit<AppData>>>,
+    frag_path: Rc<AnyDomView<sheet::State, sheet::DragAction>>,
+    frag_points: Rc<AnyDomView<sheet::State, sheet::DragAction>>,
+    frag_results: Rc<AnyDomView<AppState>>,
+    frag_options: Rc<AnyDomView<AppData>>,
 }
 
 impl From<AppData> for AppState {
@@ -242,21 +242,21 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
 
     let frag_a = labeled_valued(
         "a: ",
-        slider(data.a, -20., 20., 0.2).map_state::<Edit<AppData>, _>(|data, ()| &mut data.a),
-        textbox(data.a).map_state::<Edit<AppData>, _>(|data, ()| &mut data.a),
+        slider(data.a, -20., 20., 0.2).map_state(|data: &mut AppData| &mut data.a),
+        textbox(data.a).map_state(|data: &mut AppData| &mut data.a),
     );
     let frag_b = labeled_valued(
         "b: ",
-        slider(data.b, -20., 20., 0.2).map_state::<Edit<AppData>, _>(|data, ()| &mut data.b),
-        textbox(data.b).map_state::<Edit<AppData>, _>(|data, ()| &mut data.b),
+        slider(data.b, -20., 20., 0.2).map_state(|data: &mut AppData| &mut data.b),
+        textbox(data.b).map_state(|data: &mut AppData| &mut data.b),
     );
     let frag_c = labeled_valued(
         "c: ",
-        slider(data.c, -10., 10., 0.1).map_state::<Edit<AppData>, _>(|data, ()| &mut data.c),
-        textbox(data.c).map_state::<Edit<AppData>, _>(|data, ()| &mut data.c),
+        slider(data.c, -10., 10., 0.1).map_state(|data: &mut AppData| &mut data.c),
+        textbox(data.c).map_state(|data: &mut AppData| &mut data.c),
     );
     let frag_d_m = labeled_valued(
-        html::span::<Edit<AppData>, _, _>(if data.is_d { "d: " } else { "m: " })
+        html::span::<AppData, _, _>(if data.is_d { "d: " } else { "m: " })
             .on_dblclick(|data: &mut AppData, _| data.toggle_is_d()),
         slider(
             data.d_m,
@@ -264,8 +264,8 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
             if data.is_d { d_limit.end } else { -0.1 },
             0.1,
         )
-        .map_state::<Edit<AppData>, _>(|data, ()| &mut data.d_m),
-        textbox(data.d_m).map_state::<Edit<AppData>, _>(|data, ()| &mut data.d_m),
+        .map_state(|data: &mut AppData| &mut data.d_m),
+        textbox(data.d_m).map_state(|data: &mut AppData| &mut data.d_m),
     );
 
     let frag_render_method = select((
@@ -302,7 +302,7 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let frag_accuracy = labeled_valued(
         "log(α): ",
         slider(data.accuracy_order, 1., 4., 1.)
-            .map_state::<Edit<AppData>, _>(|data, ()| &mut data.accuracy_order),
+            .map_state(|data: &mut AppData| &mut data.accuracy_order),
         data.accuracy_order,
     );
 
@@ -328,7 +328,7 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     }
 }
 
-pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> + use<> {
+pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> + use<> {
     if state.data.c == 0. {
         state.data.c = state.data.old_c;
     } else {
@@ -419,20 +419,20 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> + 
     let frag_plots = state
         .plots
         .view(theta, kappa)
-        .map_state(|state: &mut AppState, ()| &mut state.plots);
+        .map_state(|state: &mut AppState| &mut state.plots);
 
     let frag_svg = state
         .sheet
         .view((frag_path.clone(), hover_mark, frag_points.clone()))
-        .map_state(|state: &mut AppState, ()| &mut state.sheet)
-        .map_message(|_, r| r.map(|_| ()));
+        .map_state(|state: &mut AppState| &mut state.sheet)
+        .map_message_result(|_, r| r.map(|_| ()));
 
     div((
         div((
             div((
                 frag_options
                     .clone()
-                    .map_state(|state: &mut AppState, ()| &mut state.data),
+                    .map_state(|state: &mut AppState| &mut state.data),
                 frag_results,
             ))
             .id("ui"),

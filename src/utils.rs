@@ -4,7 +4,7 @@ use xilem_web::svg::kurbo::{CubicBez, ParamCurve, ParamCurveDeriv, Point, Vec2};
 
 use crate::hb::{HyperbezParams, solver};
 
-pub fn norm_radians<D: num_dual::DualNum<f64> + Copy>(theta: D) -> D {
+pub fn norm_radians<D: num_dual::DualNum<Primitive = f64> + Copy>(theta: D) -> D {
     let mut re = theta.re().rem_euclid(f64::consts::TAU);
     if re > f64::consts::PI {
         re -= f64::consts::TAU;

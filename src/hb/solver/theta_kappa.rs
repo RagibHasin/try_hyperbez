@@ -244,7 +244,7 @@ pub fn make_hyperbez(
     //     / (4. * guess_c_alt * s_critical.powi(2) + guess_d_alt * s_critical - 2.);
     // let (guess_c_alt, guess_d_alt) = forge(guess_a_alt);
 
-    fn calc_c<D: DualNum<f64> + Copy>(a: D, b: D, d: D, traversed_theta: f64) -> D {
+    fn calc_c<D: DualNum<Primitive = f64> + Copy>(a: D, b: D, d: D, traversed_theta: f64) -> D {
         let denom = ((d + 2.) * traversed_theta - b * 2.)
             * (-(d - 2.) * traversed_theta * b * 4.
                 + b.powi(2) * 4.

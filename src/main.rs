@@ -6,7 +6,7 @@ use web_sys::window;
 use xilem_web::{
     App, DomFragment, DomView,
     concurrent::task,
-    core::{Edit, View, fork, one_of::OneOf5},
+    core::{View, fork, one_of::OneOf5},
     elements::html::{div, option, select},
     interfaces::{Element, HtmlOptionElement},
 };
@@ -90,10 +90,10 @@ impl From<Explorer> for AppState {
     }
 }
 
-fn explorer_app(state: &mut Explorer) -> impl DomView<Edit<Explorer>> + use<> {
+fn explorer_app(state: &mut Explorer) -> impl DomView<Explorer> + use<> {
     match state {
         Explorer::HyperParams(state) => OneOf5::A(hyperparams::app_logic(state).map_state(
-            |state: &mut Explorer, ()| {
+            |state: &mut Explorer| {
                 if let Explorer::HyperParams(state) = state {
                     state
                 } else {
@@ -102,7 +102,7 @@ fn explorer_app(state: &mut Explorer) -> impl DomView<Edit<Explorer>> + use<> {
             },
         )),
         Explorer::ThetaKappa(state) => OneOf5::B(hyper_theta_kappa::app_logic(state).map_state(
-            |state: &mut Explorer, ()| {
+            |state: &mut Explorer| {
                 if let Explorer::ThetaKappa(state) = state {
                     state
                 } else {
@@ -111,7 +111,7 @@ fn explorer_app(state: &mut Explorer) -> impl DomView<Edit<Explorer>> + use<> {
             },
         )),
         Explorer::EulerApprox(state) => OneOf5::C(euler_approx::app_logic(state).map_state(
-            |state: &mut Explorer, ()| {
+            |state: &mut Explorer| {
                 if let Explorer::EulerApprox(state) = state {
                     state
                 } else {
@@ -119,31 +119,31 @@ fn explorer_app(state: &mut Explorer) -> impl DomView<Edit<Explorer>> + use<> {
                 }
             },
         )),
-        Explorer::PointTangent(state) => OneOf5::D(ptan::app_logic(state).map_state(
-            |state: &mut Explorer, ()| {
+        Explorer::PointTangent(state) => {
+            OneOf5::D(ptan::app_logic(state).map_state(|state: &mut Explorer| {
                 if let Explorer::PointTangent(state) = state {
                     state
                 } else {
                     unreachable!()
                 }
-            },
-        )),
-        Explorer::Coproportional(state) => OneOf5::E(coprop::app_logic(state).map_state(
-            |state: &mut Explorer, ()| {
+            }))
+        }
+        Explorer::Coproportional(state) => {
+            OneOf5::E(coprop::app_logic(state).map_state(|state: &mut Explorer| {
                 if let Explorer::Coproportional(state) = state {
                     state
                 } else {
                     unreachable!()
                 }
-            },
-        )),
+            }))
+        }
     }
 }
 
-fn app_logic(state: &mut AppState) -> impl DomFragment<Edit<AppState>> + use<> {
+fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> + use<> {
     let app = explorer_app(&mut state.explorer)
-        .map_state(|state: &mut AppState, ()| &mut state.explorer)
-        .map_message(|state: &mut AppState, r| {
+        .map_state(|state: &mut AppState| &mut state.explorer)
+        .map_message_result(|state: &mut AppState, r| {
             state.data_fragment = state.explorer.to_string();
             window()
                 .unwrap_throw()
@@ -194,7 +194,7 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<Edit<AppState>> + use<> {
     (
         fork(
             app,
-            task::<_, _, _, Edit<AppState>, _, _>(
+            task::<_, _, _, AppState, _, _>(
                 |proxy, _| async {
                     let callback: Closure<dyn Fn(web_sys::Event)> =
                         Closure::new(move |_| proxy.send_message(()));

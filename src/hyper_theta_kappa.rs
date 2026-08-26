@@ -3,7 +3,7 @@ use std::{f64, fmt::Write, rc::Rc};
 use wasm_bindgen::JsCast;
 use xilem_web::{
     AnyDomView, DomView,
-    core::{Edit, View},
+    core::View,
     elements::{
         html::{self, button, div, option, select},
         svg::g,
@@ -44,7 +44,7 @@ enum Arrangement {
     Free,
 }
 
-type SheetElement = AnyDomView<Edit<sheet::State<Handle>>, sheet::DragAction<Handle>>;
+type SheetElement = AnyDomView<sheet::State<Handle>, sheet::DragAction<Handle>>;
 
 struct MemoizedState {
     hyperbez: hb::Hyperbezier,
@@ -54,8 +54,8 @@ struct MemoizedState {
     frag_controls: Rc<SheetElement>,
     frag_path: Rc<SheetElement>,
     frag_points: Rc<SheetElement>,
-    frag_results: Rc<AnyDomView<Edit<AppState>>>,
-    frag_options: Rc<AnyDomView<Edit<AppData>>>,
+    frag_results: Rc<AnyDomView<AppState>>,
+    frag_options: Rc<AnyDomView<AppData>>,
 }
 
 impl From<AppData> for AppState {
@@ -219,7 +219,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
 
     fn frag_controls(
         data: &AppData,
-    ) -> impl DomView<Edit<sheet::State<Handle>>, sheet::DragAction<Handle>> + use<> {
+    ) -> impl DomView<sheet::State<Handle>, sheet::DragAction<Handle>> + use<> {
         const CONTROL_LENGTH: f64 = 100.;
         let control0 = Affine::FLIP_Y * (CONTROL_LENGTH * Vec2::from_angle(data.theta0)).to_point();
         let control0 = (
@@ -278,13 +278,13 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
     ))
     .class("results");
 
-    fn frag_options(data: &AppData) -> impl DomView<Edit<AppData>> + use<> {
+    fn frag_options(data: &AppData) -> impl DomView<AppData> + use<> {
         let frag_theta0 = labeled_valued(
             "θ₀",
             div(()),
             textbox(data.theta0.to_degrees())
-                .map_state::<Edit<AppData>, _>(|data, ()| &mut data.theta0)
-                .map_message(|data: &mut AppData, r| {
+                .map_state(|data: &mut AppData| &mut data.theta0)
+                .map_message_result(|data: &mut AppData, r| {
                     data.theta0 = data.theta0.to_radians();
                     data.maintain_arrangement(Handle::Theta0);
                     r
@@ -294,8 +294,8 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
             "θ₁",
             div(()),
             textbox(data.theta1.to_degrees())
-                .map_state::<Edit<AppData>, _>(|data, ()| &mut data.theta1)
-                .map_message(|data: &mut AppData, r| {
+                .map_state(|data: &mut AppData| &mut data.theta1)
+                .map_message_result(|data: &mut AppData, r| {
                     data.theta1 = data.theta1.to_radians();
                     data.maintain_arrangement(Handle::Theta1);
                     r
@@ -305,8 +305,8 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
             "κ₀",
             div(()),
             textbox(data.kappa0)
-                .map_state::<Edit<AppData>, _>(|data, ()| &mut data.kappa0)
-                .map_message(|data: &mut AppData, r| {
+                .map_state(|data: &mut AppData| &mut data.kappa0)
+                .map_message_result(|data: &mut AppData, r| {
                     data.maintain_arrangement(Handle::Theta0);
                     r
                 }),
@@ -315,8 +315,8 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
             "κ₁",
             div(()),
             textbox(data.kappa1)
-                .map_state::<Edit<AppData>, _>(|data, ()| &mut data.kappa1)
-                .map_message(|data: &mut AppData, r| {
+                .map_state(|data: &mut AppData| &mut data.kappa1)
+                .map_message_result(|data: &mut AppData, r| {
                     data.maintain_arrangement(Handle::Theta1);
                     r
                 }),
@@ -386,7 +386,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
     })
 }
 
-pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> + use<> {
+pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> + use<> {
     let MemoizedState {
         hyperbez,
         theta,
@@ -473,7 +473,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> + 
     let frag_plots = state
         .plots
         .view(theta, kappa)
-        .map_state(|state: &mut AppState, ()| &mut state.plots);
+        .map_state(|state: &mut AppState| &mut state.plots);
 
     let frag_svg = state
         .sheet
@@ -483,7 +483,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> + 
             hover_mark,
             frag_points.clone(),
         ))
-        .map_state(|state: &mut AppState, ()| &mut state.sheet)
+        .map_state(|state: &mut AppState| &mut state.sheet)
         .map_action(
             move |state: &mut AppState, sheet::DragAction { data, event }| {
                 let p = Affine::FLIP_Y
@@ -507,7 +507,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<Edit<AppState>> + 
             div((
                 frag_options
                     .clone()
-                    .map_state(|state: &mut AppState, ()| &mut state.data),
+                    .map_state(|state: &mut AppState| &mut state.data),
                 frag_results,
             ))
             .id("ui"),

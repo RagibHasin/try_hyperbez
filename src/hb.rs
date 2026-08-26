@@ -24,7 +24,7 @@ pub struct HyperbezParams<D> {
     num1: D,
 }
 
-impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
+impl<D: DualNum<Primitive = f64> + Copy> HyperbezParams<D> {
     /// Create a new hyperbezier with the given parameters.
     pub fn new(a: D, b: D, c: D, d: D) -> Self {
         let denom = D::from(2.) / (c * 4. - d * d);
@@ -85,7 +85,7 @@ impl<D: DualNum<f64> + Copy> HyperbezParams<D> {
     }
 
     pub fn kappa_extrema(&self) -> ArrayVec<D, 2> {
-        fn filter_and_collect<D: DualNum<f64> + Copy, const N: usize>(
+        fn filter_and_collect<D: DualNum<Primitive = f64> + Copy, const N: usize>(
             res: [D; N],
         ) -> ArrayVec<D, 2> {
             let mut res: ArrayVec<D, 2> = res

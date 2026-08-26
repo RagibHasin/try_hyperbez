@@ -10,7 +10,7 @@ use crate::utils::*;
 
 use super::*;
 
-fn system_for_solving<D: DualNum<f64> + Copy>(
+fn system_for_solving<D: DualNum<Primitive = f64> + Copy>(
     p0_5_i: Point,
     phi0_5_i: f64,
     theta1_i: f64,
