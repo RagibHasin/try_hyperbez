@@ -6,7 +6,7 @@ use web_sys::window;
 use xilem_web::{
     App, DomFragment, DomView,
     concurrent::task,
-    core::{View, fork, one_of::OneOf5},
+    core::{View, fork, one_of::OneOf6},
     elements::html::{div, option, select},
     interfaces::{Element, HtmlOptionElement},
 };
@@ -18,6 +18,7 @@ mod euler_approx;
 mod hyper_theta_kappa;
 mod hyperparams;
 mod ptan;
+mod q0q1;
 
 enum Explorer {
     HyperParams(hyperparams::AppState),
@@ -25,6 +26,7 @@ enum Explorer {
     EulerApprox(euler_approx::AppState),
     PointTangent(ptan::AppState),
     Coproportional(coprop::AppState),
+    Q0Q1(q0q1::AppState),
 }
 
 impl std::str::FromStr for Explorer {
@@ -42,6 +44,7 @@ impl std::str::FromStr for Explorer {
             }
             "#ptan" => Explorer::PointTangent(params.parse::<ptan::AppData>()?.into()),
             "#coprop" => Explorer::Coproportional(params.parse::<coprop::AppData>()?.into()),
+            "#q0q1" => Explorer::Q0Q1(params.parse::<q0q1::AppData>()?.into()),
             _ => unreachable!(),
         })
     }
@@ -55,6 +58,7 @@ impl std::fmt::Display for Explorer {
             Explorer::EulerApprox(e) => write!(f, "#euler_approx;{}", e.data),
             Explorer::PointTangent(e) => write!(f, "#ptan;{}", e.data),
             Explorer::Coproportional(e) => write!(f, "#coprop;{}", e.data),
+            Explorer::Q0Q1(e) => write!(f, "#q0q1;{}", e.data),
         }
     }
 }
@@ -70,6 +74,7 @@ impl Explorer {
             Explorer::EulerApprox(e) if explorer == "#euler_approx" => e.data = params.parse()?,
             Explorer::PointTangent(e) if explorer == "#ptan" => e.data = params.parse()?,
             Explorer::Coproportional(e) if explorer == "#coprop" => e.data = params.parse()?,
+            Explorer::Q0Q1(e) if explorer == "#q0q1" => e.data = params.parse()?,
             _ => *self = s.parse()?,
         }
         Ok(())
@@ -92,7 +97,7 @@ impl From<Explorer> for AppState {
 
 fn explorer_app(state: &mut Explorer) -> impl DomView<Explorer> + use<> {
     match state {
-        Explorer::HyperParams(state) => OneOf5::A(hyperparams::app_logic(state).map_state(
+        Explorer::HyperParams(state) => OneOf6::A(hyperparams::app_logic(state).map_state(
             |state: &mut Explorer| {
                 if let Explorer::HyperParams(state) = state {
                     state
@@ -101,7 +106,7 @@ fn explorer_app(state: &mut Explorer) -> impl DomView<Explorer> + use<> {
                 }
             },
         )),
-        Explorer::ThetaKappa(state) => OneOf5::B(hyper_theta_kappa::app_logic(state).map_state(
+        Explorer::ThetaKappa(state) => OneOf6::B(hyper_theta_kappa::app_logic(state).map_state(
             |state: &mut Explorer| {
                 if let Explorer::ThetaKappa(state) = state {
                     state
@@ -110,7 +115,7 @@ fn explorer_app(state: &mut Explorer) -> impl DomView<Explorer> + use<> {
                 }
             },
         )),
-        Explorer::EulerApprox(state) => OneOf5::C(euler_approx::app_logic(state).map_state(
+        Explorer::EulerApprox(state) => OneOf6::C(euler_approx::app_logic(state).map_state(
             |state: &mut Explorer| {
                 if let Explorer::EulerApprox(state) = state {
                     state
@@ -120,7 +125,7 @@ fn explorer_app(state: &mut Explorer) -> impl DomView<Explorer> + use<> {
             },
         )),
         Explorer::PointTangent(state) => {
-            OneOf5::D(ptan::app_logic(state).map_state(|state: &mut Explorer| {
+            OneOf6::D(ptan::app_logic(state).map_state(|state: &mut Explorer| {
                 if let Explorer::PointTangent(state) = state {
                     state
                 } else {
@@ -129,8 +134,17 @@ fn explorer_app(state: &mut Explorer) -> impl DomView<Explorer> + use<> {
             }))
         }
         Explorer::Coproportional(state) => {
-            OneOf5::E(coprop::app_logic(state).map_state(|state: &mut Explorer| {
+            OneOf6::E(coprop::app_logic(state).map_state(|state: &mut Explorer| {
                 if let Explorer::Coproportional(state) = state {
+                    state
+                } else {
+                    unreachable!()
+                }
+            }))
+        }
+        Explorer::Q0Q1(state) => {
+            OneOf6::F(q0q1::app_logic(state).map_state(|state: &mut Explorer| {
+                if let Explorer::Q0Q1(state) = state {
                     state
                 } else {
                     unreachable!()
@@ -170,6 +184,9 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> + use<> {
         option("Coproportional")
             .value("coprop")
             .selected(matches!(state.explorer, Explorer::Coproportional(_))),
+        option("q₀ q₁")
+            .value("q0q1")
+            .selected(matches!(state.explorer, Explorer::Q0Q1(_))),
     ))
     .on_change(move |state: &mut AppState, e| {
         *state = AppState::from(
@@ -185,6 +202,7 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> + use<> {
                 "euler_approx" => Explorer::EulerApprox(euler_approx::AppState::default()),
                 "ptan" => Explorer::PointTangent(ptan::AppState::default()),
                 "coprop" => Explorer::Coproportional(coprop::AppState::default()),
+                "q0q1" => Explorer::Q0Q1(q0q1::AppState::default()),
                 _ => unreachable!(),
             },
         )
@@ -246,13 +264,7 @@ pub fn main() {
             .unwrap_or_else(|| Explorer::PointTangent(Default::default())),
     );
 
-    App::new(
-        xilem_web::document_body(),
-        app_state,
-        // AppState::from(Explorer::PointTangent(Default::default())),
-        app_logic,
-    )
-    .run();
+    App::new(xilem_web::document_body(), app_state, app_logic).run();
 }
 
 #[allow(unused_must_use)]

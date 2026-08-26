@@ -551,6 +551,7 @@ pub mod solver {
     pub mod ptan_analytic;
     pub mod ptan_dual;
     pub mod ptan_dual_endk;
+    pub mod q0q1;
     pub mod theta_kappa;
 }
 
