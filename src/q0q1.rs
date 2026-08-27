@@ -364,20 +364,14 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> + use<> 
     ))
     .map_state(|state: &mut AppState| &mut state.sheet)
     .map_action(
-        move |state: &mut AppState, sheet::DragAction { data, event }| {
-            let p = Affine::FLIP_Y
-                * Affine::scale(state.sheet.zoom()).then_translate(state.sheet.origin().to_vec2())
-                * Point::new(event.offset_x() as f64, event.offset_y() as f64);
-
+        move |state: &mut AppState, sheet::DragAction { data, point }| {
             *match data {
                 Handle::P1 => &mut state.data.p1,
                 Handle::P2 => &mut state.data.p2,
-            } = p;
+            } = point;
         },
     );
-    //     },
-    // );
-
+    
     div((
         div((
             div((

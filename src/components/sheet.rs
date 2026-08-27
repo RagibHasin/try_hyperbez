@@ -1,7 +1,6 @@
 // Copyright 2024 Muhammad Ragib Hasin
 // SPDX-License-Identifier: Apache-2.0
 
-use web_sys::MouseEvent;
 use xilem_web::{
     Action, DomFragment, DomView,
     elements::{
@@ -9,7 +8,7 @@ use xilem_web::{
         svg::svg,
     },
     interfaces::Element,
-    svg::kurbo::{Point, Size, Vec2},
+    svg::kurbo::{Affine, Point, Size, Vec2},
 };
 
 #[derive(Debug, PartialEq)]
@@ -38,10 +37,10 @@ pub enum DragElement<O = NoData> {
     Other(O),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DragAction<O = NoData> {
     pub data: O,
-    pub event: MouseEvent,
+    pub point: Point,
 }
 impl<O> Action for DragAction<O> {}
 
@@ -62,19 +61,19 @@ impl<DragData: Copy + 'static> State<DragData> {
             .on_mousedown(|state: &mut Self, _| state.drag = DragElement::Sheet)
             .on_mouseup(|state: &mut Self, _| state.drag = DragElement::None)
             .on_mousemove(move |state: &mut Self, e| {
-                if let DragElement::None = state.drag {
-                    return None;
-                };
+                let p = Affine::FLIP_Y
+                    * Affine::scale(state.zoom).then_translate(state.origin.to_vec2())
+                    * Point::new(e.offset_x() as f64, e.offset_y() as f64);
 
                 match state.drag {
-                    DragElement::Other(data) => Some(DragAction { data, event: e }),
+                    DragElement::Other(data) => Some(DragAction { data, point: p }),
                     DragElement::Sheet => {
                         let delta =
                             state.zoom * Vec2::new(e.movement_x() as f64, e.movement_y() as f64);
                         state.origin -= delta;
                         None
                     }
-                    DragElement::None => unreachable!(),
+                    DragElement::None => None,
                 }
             })
             .on_wheel(|state: &mut Self, e| {
