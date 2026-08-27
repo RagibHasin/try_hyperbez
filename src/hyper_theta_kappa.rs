@@ -475,32 +475,28 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> + use<> 
         .view(theta, kappa)
         .map_state(|state: &mut AppState| &mut state.plots);
 
-    let frag_svg = state
-        .sheet
-        .view((
-            frag_controls.clone(),
-            frag_path.clone(),
-            hover_mark,
-            frag_points.clone(),
-        ))
-        .map_state(|state: &mut AppState| &mut state.sheet)
-        .map_action(
-            move |state: &mut AppState, sheet::DragAction { data, event }| {
-                let p = Affine::FLIP_Y
-                    * Affine::scale(state.sheet.zoom())
-                        .then_translate(state.sheet.origin().to_vec2())
-                    * Point::new(event.offset_x() as f64, event.offset_y() as f64);
+    let frag_svg = state.sheet.view((
+        frag_controls.clone(),
+        frag_path.clone(),
+        hover_mark,
+        frag_points.clone(),
+    ))
+    .map_state(|state: &mut AppState| &mut state.sheet)
+    .map_action(
+        move |state: &mut AppState, sheet::DragAction { data, event }| {
+            let p = Affine::FLIP_Y
+                * Affine::scale(state.sheet.zoom()).then_translate(state.sheet.origin().to_vec2())
+                * Point::new(event.offset_x() as f64, event.offset_y() as f64);
 
-                match data {
-                    Handle::Theta0 => state.data.theta0 = p.to_vec2().angle(),
-                    Handle::Theta1 => {
-                        state.data.theta1 =
-                            (Point::new(BASE_WIDTH, 0.) - Affine::FLIP_Y * p).angle()
-                    }
-                };
-                state.data.maintain_arrangement(data);
-            },
-        );
+            match data {
+                Handle::Theta0 => state.data.theta0 = p.to_vec2().angle(),
+                Handle::Theta1 => {
+                    state.data.theta1 = (Point::new(BASE_WIDTH, 0.) - Affine::FLIP_Y * p).angle()
+                }
+            };
+            state.data.maintain_arrangement(data);
+        },
+    );
 
     div((
         div((
@@ -514,7 +510,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> + use<> 
             frag_plots,
         ))
         .id("pane-left"),
-        div(frag_svg).id("render-sheet"),
+        frag_svg,
     ))
     .id("app-root")
 }

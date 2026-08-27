@@ -431,30 +431,27 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> + use<> 
         .view(theta, kappa)
         .map_state(|state: &mut AppState| &mut state.plots);
 
-    let frag_svg = state
-        .sheet
-        .view((
-            frag_controls.clone(),
-            frag_cubicbez.clone(),
-            frag_path.clone(),
-            hover_mark,
-            frag_points.clone(),
-        ))
-        .map_state(|state: &mut AppState| &mut state.sheet)
-        .map_action(
-            move |state: &mut AppState, sheet::DragAction { data, event }| {
-                let p = Affine::FLIP_Y
-                    * Affine::scale(state.sheet.zoom())
-                        .then_translate(state.sheet.origin().to_vec2())
-                    * Point::new(event.offset_x() as f64, event.offset_y() as f64);
+    let frag_svg = state.sheet.view((
+        frag_controls.clone(),
+        frag_cubicbez.clone(),
+        frag_path.clone(),
+        hover_mark,
+        frag_points.clone(),
+    ))
+    .map_state(|state: &mut AppState| &mut state.sheet)
+    .map_action(
+        move |state: &mut AppState, sheet::DragAction { data, event }| {
+            let p = Affine::FLIP_Y
+                * Affine::scale(state.sheet.zoom()).then_translate(state.sheet.origin().to_vec2())
+                * Point::new(event.offset_x() as f64, event.offset_y() as f64);
 
-                *match data {
-                    Handle::P1 => &mut state.data.p1,
-                    Handle::P2 => &mut state.data.p2,
-                } = p;
-                state.data.maintain_symmetry(data);
-            },
-        );
+            *match data {
+                Handle::P1 => &mut state.data.p1,
+                Handle::P2 => &mut state.data.p2,
+            } = p;
+            state.data.maintain_symmetry(data);
+        },
+    );
 
     div((
         div((
@@ -468,7 +465,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> + use<> 
             frag_plots,
         ))
         .id("pane-left"),
-        div(frag_svg).id("render-sheet"),
+        frag_svg,
     ))
     .id("app-root")
 }

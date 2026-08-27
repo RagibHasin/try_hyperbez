@@ -4,7 +4,10 @@
 use web_sys::MouseEvent;
 use xilem_web::{
     Action, DomFragment, DomView,
-    elements::svg::svg,
+    elements::{
+        html::{button, div},
+        svg::svg,
+    },
     interfaces::Element,
     svg::kurbo::{Point, Size, Vec2},
 };
@@ -48,7 +51,7 @@ impl<DragData: Copy + 'static> State<DragData> {
         children: Children,
     ) -> impl DomView<Self, DragAction<DragData>> + use<DragData, Children> {
         let sheet_size = self.zoom * self.size;
-        svg(children)
+        let sheet = svg(children)
             .attr(
                 "viewBox",
                 format!(
@@ -93,13 +96,20 @@ impl<DragData: Copy + 'static> State<DragData> {
             })
             .passive(false)
             .on_resize(|state: &mut Self, e| {
-                let new_width = e.content_rect().width();
-                let new_height = e.content_rect().height();
-                state.origin.x -= (new_width * state.zoom - state.size.width) / 2.;
-                state.origin.y -= (new_height * state.zoom - state.size.height) / 2.;
-                state.size.width = new_width;
-                state.size.height = new_height;
-            })
+                let new_size = Size::new(e.content_rect().width(), e.content_rect().height());
+                state.origin -= (new_size * state.zoom - state.size).to_vec2() / 2.;
+                state.size = new_size;
+            });
+
+        div((
+            sheet,
+            div(button("Reset View").on_click(|state: &mut Self, _| {
+                state.origin = Point::new(250., 0.) - state.size.to_vec2() * 0.75;
+                state.zoom = 1.5;
+            }))
+            .id("toolbar"),
+        ))
+        .id("render-sheet")
     }
 
     pub fn size(&self) -> Size {

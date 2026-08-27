@@ -363,7 +363,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> + use<> 
             frag_plots,
         ))
         .id("pane-left"),
-        div(frag_svg).id("render-sheet"),
+        frag_svg,
     ))
     .id("app-root")
 }
