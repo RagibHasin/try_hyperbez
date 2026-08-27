@@ -33,8 +33,8 @@ impl std::str::FromStr for Explorer {
     type Err = Box<dyn std::error::Error>;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (explorer, params) = s.split_once(';').ok_or("invalid format")?;
-        Ok(match explorer {
+        let (tag, params) = s.split_once(';').ok_or("invalid format")?;
+        Ok(match tag {
             "#hyperparams" => Explorer::HyperParams(params.parse::<hyperparams::AppData>()?.into()),
             "#hyper_theta_kappa" => {
                 Explorer::ThetaKappa(params.parse::<hyper_theta_kappa::AppData>()?.into())
@@ -63,18 +63,28 @@ impl std::fmt::Display for Explorer {
     }
 }
 
+macro_rules! state_mapper {
+    ($var:ident) => {
+        |state: &mut Explorer| {
+            if let Explorer::$var(state) = state {
+                state
+            } else {
+                unreachable!()
+            }
+        }
+    };
+}
+
 impl Explorer {
     fn try_update(&mut self, s: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let (explorer, params) = s.split_once(';').ok_or("invalid format")?;
+        let (tag, params) = s.split_once(';').ok_or("invalid format")?;
         match self {
-            Explorer::HyperParams(e) if explorer == "#hyperparams" => e.data = params.parse()?,
-            Explorer::ThetaKappa(e) if explorer == "#hyper_theta_kappa" => {
-                e.data = params.parse()?
-            }
-            Explorer::EulerApprox(e) if explorer == "#euler_approx" => e.data = params.parse()?,
-            Explorer::PointTangent(e) if explorer == "#ptan" => e.data = params.parse()?,
-            Explorer::Coproportional(e) if explorer == "#coprop" => e.data = params.parse()?,
-            Explorer::Q0Q1(e) if explorer == "#q0q1" => e.data = params.parse()?,
+            Explorer::HyperParams(e) if tag == "#hyperparams" => e.data = params.parse()?,
+            Explorer::ThetaKappa(e) if tag == "#hyper_theta_kappa" => e.data = params.parse()?,
+            Explorer::EulerApprox(e) if tag == "#euler_approx" => e.data = params.parse()?,
+            Explorer::PointTangent(e) if tag == "#ptan" => e.data = params.parse()?,
+            Explorer::Coproportional(e) if tag == "#coprop" => e.data = params.parse()?,
+            Explorer::Q0Q1(e) if tag == "#q0q1" => e.data = params.parse()?,
             _ => *self = s.parse()?,
         }
         Ok(())
@@ -88,6 +98,29 @@ impl Explorer {
             Explorer::PointTangent(e) => *e = ptan::AppState::default(),
             Explorer::Coproportional(e) => *e = coprop::AppState::default(),
             Explorer::Q0Q1(e) => *e = q0q1::AppState::default(),
+        }
+    }
+
+    fn view(&mut self) -> impl DomView<Self> + use<> {
+        match self {
+            Explorer::HyperParams(state) => {
+                OneOf6::A(hyperparams::app_logic(state).map_state(state_mapper!(HyperParams)))
+            }
+            Explorer::ThetaKappa(state) => {
+                OneOf6::B(hyper_theta_kappa::app_logic(state).map_state(state_mapper!(ThetaKappa)))
+            }
+            Explorer::EulerApprox(state) => {
+                OneOf6::C(euler_approx::app_logic(state).map_state(state_mapper!(EulerApprox)))
+            }
+            Explorer::PointTangent(state) => {
+                OneOf6::D(ptan::app_logic(state).map_state(state_mapper!(PointTangent)))
+            }
+            Explorer::Coproportional(state) => {
+                OneOf6::E(coprop::app_logic(state).map_state(state_mapper!(Coproportional)))
+            }
+            Explorer::Q0Q1(state) => {
+                OneOf6::F(q0q1::app_logic(state).map_state(state_mapper!(Q0Q1)))
+            }
         }
     }
 }
@@ -106,67 +139,10 @@ impl From<Explorer> for AppState {
     }
 }
 
-fn explorer_app(state: &mut Explorer) -> impl DomView<Explorer> + use<> {
-    match state {
-        Explorer::HyperParams(state) => OneOf6::A(hyperparams::app_logic(state).map_state(
-            |state: &mut Explorer| {
-                if let Explorer::HyperParams(state) = state {
-                    state
-                } else {
-                    unreachable!()
-                }
-            },
-        )),
-        Explorer::ThetaKappa(state) => OneOf6::B(hyper_theta_kappa::app_logic(state).map_state(
-            |state: &mut Explorer| {
-                if let Explorer::ThetaKappa(state) = state {
-                    state
-                } else {
-                    unreachable!()
-                }
-            },
-        )),
-        Explorer::EulerApprox(state) => OneOf6::C(euler_approx::app_logic(state).map_state(
-            |state: &mut Explorer| {
-                if let Explorer::EulerApprox(state) = state {
-                    state
-                } else {
-                    unreachable!()
-                }
-            },
-        )),
-        Explorer::PointTangent(state) => {
-            OneOf6::D(ptan::app_logic(state).map_state(|state: &mut Explorer| {
-                if let Explorer::PointTangent(state) = state {
-                    state
-                } else {
-                    unreachable!()
-                }
-            }))
-        }
-        Explorer::Coproportional(state) => {
-            OneOf6::E(coprop::app_logic(state).map_state(|state: &mut Explorer| {
-                if let Explorer::Coproportional(state) = state {
-                    state
-                } else {
-                    unreachable!()
-                }
-            }))
-        }
-        Explorer::Q0Q1(state) => {
-            OneOf6::F(q0q1::app_logic(state).map_state(|state: &mut Explorer| {
-                if let Explorer::Q0Q1(state) = state {
-                    state
-                } else {
-                    unreachable!()
-                }
-            }))
-        }
-    }
-}
-
 fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> + use<> {
-    let app = explorer_app(&mut state.explorer)
+    let app = state
+        .explorer
+        .view()
         .map_state(|state: &mut AppState| &mut state.explorer)
         .map_message_result(|state: &mut AppState, r| {
             state.data_fragment = state.explorer.to_string();
@@ -240,7 +216,7 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> + use<> {
                         .set_onhashchange(Some(callback.as_ref().unchecked_ref()));
                     std::mem::forget(callback);
                 },
-                |state: &mut AppState, _: ()| {
+                |state: &mut AppState, ()| {
                     if let Ok(url_fragment) = window().unwrap_throw().location().hash()
                         && state.data_fragment != url_fragment
                         && state.explorer.try_update(&url_fragment).is_ok()
