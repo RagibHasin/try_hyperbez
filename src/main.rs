@@ -7,7 +7,7 @@ use xilem_web::{
     App, DomFragment, DomView,
     concurrent::task,
     core::{View, fork, one_of::OneOf6},
-    elements::html::{div, option, select},
+    elements::html::{button, div, option, select},
     interfaces::{Element, HtmlOptionElement},
 };
 
@@ -78,6 +78,17 @@ impl Explorer {
             _ => *self = s.parse()?,
         }
         Ok(())
+    }
+
+    fn refresh(&mut self) {
+        match self {
+            Explorer::HyperParams(e) => *e = hyperparams::AppState::default(),
+            Explorer::ThetaKappa(e) => *e = hyper_theta_kappa::AppState::default(),
+            Explorer::EulerApprox(e) => *e = euler_approx::AppState::default(),
+            Explorer::PointTangent(e) => *e = ptan::AppState::default(),
+            Explorer::Coproportional(e) => *e = coprop::AppState::default(),
+            Explorer::Q0Q1(e) => *e = q0q1::AppState::default(),
+        }
     }
 }
 
@@ -168,45 +179,53 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> + use<> {
             r
         });
 
-    let toolbar = div(select((
-        option("HyperParams")
-            .value("hyperparams")
-            .selected(matches!(state.explorer, Explorer::HyperParams(_))),
-        option("θ⋅κ → HyperParams")
-            .value("hyper_theta_kappa")
-            .selected(matches!(state.explorer, Explorer::ThetaKappa(_))),
-        option("Euler Approximation")
-            .value("euler_approx")
-            .selected(matches!(state.explorer, Explorer::EulerApprox(_))),
-        option("Point · Tangent")
-            .value("ptan")
-            .selected(matches!(state.explorer, Explorer::PointTangent(_))),
-        option("Coproportional")
-            .value("coprop")
-            .selected(matches!(state.explorer, Explorer::Coproportional(_))),
-        option("q₀ q₁")
-            .value("q0q1")
-            .selected(matches!(state.explorer, Explorer::Q0Q1(_))),
+    let toolbar = div((
+        select((
+            option("HyperParams")
+                .value("hyperparams")
+                .selected(matches!(state.explorer, Explorer::HyperParams(_))),
+            option("θ⋅κ → HyperParams")
+                .value("hyper_theta_kappa")
+                .selected(matches!(state.explorer, Explorer::ThetaKappa(_))),
+            option("Euler Approximation")
+                .value("euler_approx")
+                .selected(matches!(state.explorer, Explorer::EulerApprox(_))),
+            option("Point · Tangent")
+                .value("ptan")
+                .selected(matches!(state.explorer, Explorer::PointTangent(_))),
+            option("Coproportional")
+                .value("coprop")
+                .selected(matches!(state.explorer, Explorer::Coproportional(_))),
+            option("q₀ q₁")
+                .value("q0q1")
+                .selected(matches!(state.explorer, Explorer::Q0Q1(_))),
+        ))
+        .on_change(|state: &mut AppState, e| {
+            *state = AppState::from(
+                match e
+                    .target()
+                    .unwrap_throw()
+                    .unchecked_into::<web_sys::HtmlSelectElement>()
+                    .value()
+                    .as_str()
+                {
+                    "hyperparams" => Explorer::HyperParams(hyperparams::AppState::default()),
+                    "hyper_theta_kappa" => {
+                        Explorer::ThetaKappa(hyper_theta_kappa::AppState::default())
+                    }
+                    "euler_approx" => Explorer::EulerApprox(euler_approx::AppState::default()),
+                    "ptan" => Explorer::PointTangent(ptan::AppState::default()),
+                    "coprop" => Explorer::Coproportional(coprop::AppState::default()),
+                    "q0q1" => Explorer::Q0Q1(q0q1::AppState::default()),
+                    _ => unreachable!(),
+                },
+            )
+        }),
+        button("🔄︎").on_click(|state: &mut AppState, _| {
+            state.explorer.refresh();
+            state.data_fragment = state.explorer.to_string();
+        }),
     ))
-    .on_change(move |state: &mut AppState, e| {
-        *state = AppState::from(
-            match e
-                .target()
-                .unwrap_throw()
-                .unchecked_into::<web_sys::HtmlSelectElement>()
-                .value()
-                .as_ref()
-            {
-                "hyperparams" => Explorer::HyperParams(hyperparams::AppState::default()),
-                "hyper_theta_kappa" => Explorer::ThetaKappa(hyper_theta_kappa::AppState::default()),
-                "euler_approx" => Explorer::EulerApprox(euler_approx::AppState::default()),
-                "ptan" => Explorer::PointTangent(ptan::AppState::default()),
-                "coprop" => Explorer::Coproportional(coprop::AppState::default()),
-                "q0q1" => Explorer::Q0Q1(q0q1::AppState::default()),
-                _ => unreachable!(),
-            },
-        )
-    }))
     .id("toolbar");
 
     (
