@@ -13,7 +13,7 @@ use xilem_web::{
 #[derive(Debug, PartialEq)]
 pub struct State {
     size: Size,
-    hovered_x: Option<f64>,
+    pub hovered_x: Option<f64>,
 }
 
 impl Default for State {
@@ -40,10 +40,6 @@ impl State {
             state.size.height = e.content_rect().height();
         })
         .id("plots")
-    }
-
-    pub fn hovered_x(&self) -> Option<f64> {
-        self.hovered_x
     }
 }
 

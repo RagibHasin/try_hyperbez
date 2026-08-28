@@ -357,7 +357,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> + use<> 
     let mut hovered_theta = None;
     let mut hovered_kappa = None;
     let mut hover_mark = None;
-    if let Some(s) = state.plots.hovered_x() {
+    if let Some(s) = state.plots.hovered_x {
         hovered_point = Some(hyperbez.eval(s));
         let i = (s * 1e3) as usize;
         (hovered_theta, hovered_kappa) = (Some(theta[i]), Some(kappa[i]));
@@ -389,7 +389,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> + use<> 
         (),
         state
             .plots
-            .hovered_x()
+            .hovered_x
             .map_or(empty.clone(), |s| format!("{:.3}", s)),
     );
     let frag_hovered_p_x = labeled_valued(
@@ -431,23 +431,24 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> + use<> 
         .view(theta, kappa)
         .map_state(|state: &mut AppState| &mut state.plots);
 
-    let frag_svg = state.sheet.view((
-        frag_controls.clone(),
-        frag_cubicbez.clone(),
-        frag_path.clone(),
-        hover_mark,
-        frag_points.clone(),
-    ))
-    .map_state(|state: &mut AppState| &mut state.sheet)
-    .map_action(
-        move |state: &mut AppState, sheet::DragAction { data, point }| {
+    let frag_svg = state
+        .sheet
+        .view((
+            frag_controls.clone(),
+            frag_cubicbez.clone(),
+            frag_path.clone(),
+            hover_mark,
+            frag_points.clone(),
+        ))
+        .map_state(|state: &mut AppState| &mut state.sheet)
+        .map_action(|state: &mut AppState, sheet::DragAction { data, point }| {
             *match data {
                 Handle::P1 => &mut state.data.p1,
                 Handle::P2 => &mut state.data.p2,
             } = point;
             state.data.maintain_symmetry(data);
-        },
-    );
+        })
+        .map_message_result(bridge_hover!());
 
     div((
         div((

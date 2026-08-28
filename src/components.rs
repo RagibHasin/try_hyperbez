@@ -96,5 +96,20 @@ pub fn spacer<T: 'static>() -> impl DomView<T> {
     div(()).class("spacer")
 }
 
+macro_rules! bridge_hover {
+    () => {
+        |state: &mut AppState, r| {
+            if let Some(p) = state.sheet.hovered_pt() {
+                let hit = xilem_web::svg::kurbo::ParamCurveNearest::nearest(&state.memo.value().hyperbez, p, 0.005);
+                tracing::trace!(%p, ?hit, zoom = state.sheet.zoom());
+                state.plots.hovered_x =
+                    (hit.distance_sq * state.sheet.zoom().powi(-2) < 25.).then_some(hit.t);
+            }
+            r
+        }
+    };
+}
+pub(crate) use bridge_hover;
+
 pub mod plots;
 pub mod sheet;

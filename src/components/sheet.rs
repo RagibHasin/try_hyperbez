@@ -17,6 +17,7 @@ pub struct State<DragData = NoData> {
     origin: Point,
     zoom: f64,
     drag: DragElement<DragData>,
+    hovered_pt: Option<Point>,
 }
 
 impl<O> Default for State<O> {
@@ -26,6 +27,7 @@ impl<O> Default for State<O> {
             origin: Point::new(-350., -450.),
             zoom: 1.5,
             drag: DragElement::None,
+            hovered_pt: None,
         }
     }
 }
@@ -64,7 +66,7 @@ impl<DragData: Copy + 'static> State<DragData> {
                 let p = Affine::FLIP_Y
                     * Affine::scale(state.zoom).then_translate(state.origin.to_vec2())
                     * Point::new(e.offset_x() as f64, e.offset_y() as f64);
-
+                state.hovered_pt = Some(p);
                 match state.drag {
                     DragElement::Other(data) => Some(DragAction { data, point: p }),
                     DragElement::Sheet => {
@@ -76,6 +78,7 @@ impl<DragData: Copy + 'static> State<DragData> {
                     DragElement::None => None,
                 }
             })
+            .on_mouseleave(|state: &mut Self, _| state.hovered_pt = None)
             .on_wheel(|state: &mut Self, e| {
                 e.prevent_default();
 
@@ -121,6 +124,10 @@ impl<DragData: Copy + 'static> State<DragData> {
 
     pub fn zoom(&self) -> f64 {
         self.zoom
+    }
+
+    pub fn hovered_pt(&self) -> Option<Point> {
+        self.hovered_pt
     }
 
     pub fn set_drag(&mut self, e: Option<DragData>) {

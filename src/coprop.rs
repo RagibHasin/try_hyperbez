@@ -348,7 +348,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> + use<> 
     let mut hovered_theta = None;
     let mut hovered_kappa = None;
     let mut hover_mark = None;
-    if let Some(s) = state.plots.hovered_x() {
+    if let Some(s) = state.plots.hovered_x {
         hovered_point = Some(hyperbez.eval(s));
         let i = (s * 1e3) as usize;
         (hovered_theta, hovered_kappa) = (Some(theta[i]), Some(kappa[i]));
@@ -380,7 +380,7 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> + use<> 
         (),
         state
             .plots
-            .hovered_x()
+            .hovered_x
             .map_or(empty.clone(), |s| format!("{:.3}", s)),
     );
     let frag_hovered_p_x = labeled_valued(
@@ -440,7 +440,8 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> + use<> 
                 } = point;
                 state.data.maintain_symmetry(data);
             },
-        );
+        )
+        .map_message_result(bridge_hover!());
 
     div((
         div((
