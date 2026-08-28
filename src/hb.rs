@@ -6,7 +6,8 @@ use xilem_web::svg::kurbo;
 
 use arrayvec::ArrayVec;
 use kurbo::{
-    CurveFitSample, ParamCurve, ParamCurveFit, Point, Vec2, common::GAUSS_LEGENDRE_COEFFS_32,
+    CurveFitSample, Nearest, ParamCurve, ParamCurveFit, ParamCurveNearest, Point, Vec2,
+    common::GAUSS_LEGENDRE_COEFFS_32,
 };
 use nalgebra::Vector2;
 use num_dual::DualNum;
@@ -390,23 +391,57 @@ impl ParamCurveFit for Hyperbezier {
     }
 }
 
-// impl ParamCurveNearest for Hyperbezier {
-//     fn nearest(&self, p: Point, accuracy: f64) -> kurbo::Nearest {
-//         let p_local = Affine::translate(self.p0.to_vec2())
-//             .then_rotate(-self.scale_rot.angle())
-//             .then_scale(1. / self.scale_rot.length())
-//             * p;
+impl ParamCurveNearest for Hyperbezier {
+    fn nearest(&self, p: Point, accuracy: f64) -> Nearest {
+        let p = kurbo::Affine::translate(self.p0.to_vec2())
+            .then_rotate(-self.scale_rot.angle())
+            .then_scale(1. / self.scale_rot.length())
+            * p;
 
-//         // 1. if theta1 < 2pi, check if p_local is in the sweep region between normal0 and normal1
-//         //   1a. if true, then subdivide and repeat from 1 for each half
-//         //   1b. if false, then either s = 0 or s = 1 is nearest, check and tell
-//         // 2. otherwise sibdivide for theta1 = 2pi and repeat from 1
+        let g = |s| {
+            (
+                s,
+                (p.to_vec2() - as_vec2(self.params.integrate(s)))
+                    .dot(Vec2::from_angle(self.params.theta(s))),
+            )
+        };
+        let samples = [0.]
+            .into_iter()
+            .chain(self.params.kappa_extrema())
+            .chain([1.])
+            .map(g)
+            .collect::<ArrayVec<_, 4>>();
 
-//         if self.params.theta(1.) >= std::f64::consts::TAU {}
+        let max_iter = (-accuracy.log2()).ceil() as u8;
+        let hit = |s| Nearest {
+            distance_sq: self.scale_rot.hypot2()
+                * (p - as_vec2(self.params.integrate(s))).to_vec2().hypot2(),
+            t: s,
+        };
 
-//         todo!()
-//     }
-// }
+        for [(mut a_s, mut a_g), (mut b_s, mut b_g)] in samples.array_windows().copied() {
+            if a_g.signum() == b_g.signum() {
+                continue;
+            }
+
+            for _ in 0..max_iter {
+                if b_s - a_s <= accuracy {
+                    return hit((b_s + a_s) / 2.);
+                }
+
+                let (c_s, c_g) = g(a_s + a_g * (b_s - a_s) / (a_g - b_g));
+                if c_g.signum() == a_g.signum() {
+                    (a_s, a_g) = (c_s, c_g);
+                } else {
+                    (b_s, b_g) = (c_s, c_g);
+                }
+            }
+        }
+
+        let ends = [0., 1.].map(hit);
+        ends[(ends[0].distance_sq < ends[1].distance_sq) as usize]
+    }
+}
 
 /// For curve κ = 1/(1-x^2)^2, in range -x..x, what is the expected height?
 pub fn forward_scale(x: f64) -> f64 {
@@ -601,6 +636,31 @@ mod tests {
         let hb = HyperbezParams::new(0., -3f64.sqrt() / 2., -0.9, 0.9);
         let extrema = hb.kappa_extrema();
         tracing::trace!(?extrema);
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test_hit0() {
+        let hb = Hyperbezier::from_points_params(
+            HyperbezParams::new(0., -1.5, 0.18, -0.18),
+            Point::ZERO,
+            Point::new(500., 0.),
+        );
+        let test_p = [
+            Point::new(-1., 0.),
+            Point::new(501., 0.),
+            Point::new(250., 0.),
+            Point::new(150., 0.),
+            Point::new(350., 0.),
+            Point::new(250., 200.),
+            Point::new(150., 200.),
+            Point::new(350., 200.),
+        ];
+        let accuracy = 0.001953125;
+        for p in test_p {
+            let result = hb.nearest(p, accuracy);
+            tracing::trace!(%p, ?result);
+        }
     }
 
     #[test]
