@@ -405,12 +405,18 @@ impl ParamCurveNearest for Hyperbezier {
                     .dot(Vec2::from_angle(self.params.theta(s))),
             )
         };
-        let samples = [0.]
+        let extrema = [0.]
             .into_iter()
             .chain(self.params.kappa_extrema())
             .chain([1.])
-            .map(g)
             .collect::<ArrayVec<_, 4>>();
+        let samples = extrema
+            .array_windows()
+            .copied()
+            .flat_map(|[a, b]| [a, a + (b - a) / 3., b - (b - a) / 3.])
+            .chain([1.])
+            .map(g)
+            .collect::<ArrayVec<_, 10>>();
 
         let max_iter = (-accuracy.log2()).ceil() as u8;
         let hit = |s| Nearest {
@@ -419,27 +425,34 @@ impl ParamCurveNearest for Hyperbezier {
             t: s,
         };
 
-        for [(mut a_s, mut a_g), (mut b_s, mut b_g)] in samples.array_windows().copied() {
-            if a_g.signum() == b_g.signum() {
-                continue;
-            }
-
-            for _ in 0..max_iter {
-                if b_s - a_s <= accuracy {
-                    return hit((b_s + a_s) / 2.);
+        let filtered = samples.array_windows().copied().flat_map(
+            |[(mut a_s, mut a_g), (mut b_s, mut b_g)]| {
+                if a_g.signum() == b_g.signum() {
+                    return None;
                 }
 
-                let (c_s, c_g) = g(a_s + a_g * (b_s - a_s) / (a_g - b_g));
-                if c_g.signum() == a_g.signum() {
-                    (a_s, a_g) = (c_s, c_g);
-                } else {
-                    (b_s, b_g) = (c_s, c_g);
-                }
-            }
-        }
+                for _ in 0..max_iter {
+                    if b_s - a_s <= accuracy {
+                        return Some((b_s + a_s) / 2.);
+                    }
 
-        let ends = [0., 1.].map(hit);
-        ends[(ends[0].distance_sq < ends[1].distance_sq) as usize]
+                    let (c_s, c_g) = g(a_s + a_g * (b_s - a_s) / (a_g - b_g));
+                    if c_g.signum() == a_g.signum() {
+                        (a_s, a_g) = (c_s, c_g);
+                    } else {
+                        (b_s, b_g) = (c_s, c_g);
+                    }
+                }
+                None
+            },
+        );
+
+        [0.].into_iter()
+            .chain(filtered)
+            .chain([1.])
+            .map(hit)
+            .min_by(|a, b| a.distance_sq.total_cmp(&b.distance_sq))
+            .unwrap()
     }
 }
 
@@ -657,6 +670,29 @@ mod tests {
             Point::new(350., 200.),
         ];
         let accuracy = 0.001953125;
+        for p in test_p {
+            let result = hb.nearest(p, accuracy);
+            tracing::trace!(%p, ?result);
+        }
+    }
+
+    #[test]
+    #[test_log(default_log_filter = "trace")]
+    fn test_hit1() {
+        let hb = Hyperbezier::from_points_params(
+            HyperbezParams::new(32.790, -6.350, 25.950, -9.476),
+            Point::ZERO,
+            Point::new(500., 0.),
+        );
+        let test_p = [
+            Point::new(325., -100.),
+            Point::new(350., -80.),
+            Point::new(390., -70.),
+            Point::new(420., -50.),
+            Point::new(445., -35.),
+            Point::new(550., -100.),
+        ];
+        let accuracy = 0.005;
         for p in test_p {
             let result = hb.nearest(p, accuracy);
             tracing::trace!(%p, ?result);
