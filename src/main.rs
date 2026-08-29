@@ -6,7 +6,7 @@ use web_sys::window;
 use xilem_web::{
     App, DomFragment, DomView,
     concurrent::task,
-    core::{View, fork, one_of::OneOf6},
+    core::{View, fork, one_of::OneOf7},
     elements::html::{button, div, option, select},
     interfaces::{Element, HtmlOptionElement},
 };
@@ -17,6 +17,7 @@ mod coprop;
 mod euler_approx;
 mod hyper_theta_kappa;
 mod hyperparams;
+mod ladder_alt;
 mod ptan;
 mod q0q1;
 
@@ -27,6 +28,7 @@ enum Explorer {
     PointTangent(ptan::AppState),
     Coproportional(coprop::AppState),
     Q0Q1(q0q1::AppState),
+    LadderAlt(ladder_alt::AppState),
 }
 
 impl std::str::FromStr for Explorer {
@@ -45,6 +47,7 @@ impl std::str::FromStr for Explorer {
             "#ptan" => Explorer::PointTangent(params.parse::<ptan::AppData>()?.into()),
             "#coprop" => Explorer::Coproportional(params.parse::<coprop::AppData>()?.into()),
             "#q0q1" => Explorer::Q0Q1(params.parse::<q0q1::AppData>()?.into()),
+            "#ladder_alt" => Explorer::LadderAlt(params.parse::<ladder_alt::AppData>()?.into()),
             _ => unreachable!(),
         })
     }
@@ -59,6 +62,7 @@ impl std::fmt::Display for Explorer {
             Explorer::PointTangent(e) => write!(f, "#ptan;{}", e.data),
             Explorer::Coproportional(e) => write!(f, "#coprop;{}", e.data),
             Explorer::Q0Q1(e) => write!(f, "#q0q1;{}", e.data),
+            Explorer::LadderAlt(e) => write!(f, "#ladder_alt;{}", e.data),
         }
     }
 }
@@ -85,6 +89,7 @@ impl Explorer {
             Explorer::PointTangent(e) if tag == "#ptan" => e.data = params.parse()?,
             Explorer::Coproportional(e) if tag == "#coprop" => e.data = params.parse()?,
             Explorer::Q0Q1(e) if tag == "#q0q1" => e.data = params.parse()?,
+            Explorer::LadderAlt(e) if tag == "#ladder_alt" => e.data = params.parse()?,
             _ => *self = s.parse()?,
         }
         Ok(())
@@ -98,28 +103,32 @@ impl Explorer {
             Explorer::PointTangent(e) => e.data = ptan::AppData::default(),
             Explorer::Coproportional(e) => e.data = coprop::AppData::default(),
             Explorer::Q0Q1(e) => e.data = q0q1::AppData::default(),
+            Explorer::LadderAlt(e) => e.data = ladder_alt::AppData::default(),
         }
     }
 
     fn view(&mut self) -> impl DomView<Self> + use<> {
         match self {
             Explorer::HyperParams(state) => {
-                OneOf6::A(hyperparams::app_logic(state).map_state(state_mapper!(HyperParams)))
+                OneOf7::A(hyperparams::app_logic(state).map_state(state_mapper!(HyperParams)))
             }
             Explorer::ThetaKappa(state) => {
-                OneOf6::B(hyper_theta_kappa::app_logic(state).map_state(state_mapper!(ThetaKappa)))
+                OneOf7::B(hyper_theta_kappa::app_logic(state).map_state(state_mapper!(ThetaKappa)))
             }
             Explorer::EulerApprox(state) => {
-                OneOf6::C(euler_approx::app_logic(state).map_state(state_mapper!(EulerApprox)))
+                OneOf7::C(euler_approx::app_logic(state).map_state(state_mapper!(EulerApprox)))
             }
             Explorer::PointTangent(state) => {
-                OneOf6::D(ptan::app_logic(state).map_state(state_mapper!(PointTangent)))
+                OneOf7::D(ptan::app_logic(state).map_state(state_mapper!(PointTangent)))
             }
             Explorer::Coproportional(state) => {
-                OneOf6::E(coprop::app_logic(state).map_state(state_mapper!(Coproportional)))
+                OneOf7::E(coprop::app_logic(state).map_state(state_mapper!(Coproportional)))
             }
             Explorer::Q0Q1(state) => {
-                OneOf6::F(q0q1::app_logic(state).map_state(state_mapper!(Q0Q1)))
+                OneOf7::F(q0q1::app_logic(state).map_state(state_mapper!(Q0Q1)))
+            }
+            Explorer::LadderAlt(state) => {
+                OneOf7::G(ladder_alt::app_logic(state).map_state(state_mapper!(LadderAlt)))
             }
         }
     }
@@ -175,6 +184,9 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> + use<> {
             option("q₀ q₁")
                 .value("q0q1")
                 .selected(matches!(state.explorer, Explorer::Q0Q1(_))),
+            option("Ladder (Alt)")
+                .value("ladder_alt")
+                .selected(matches!(state.explorer, Explorer::LadderAlt(_))),
         ))
         .on_change(|state: &mut AppState, e| {
             *state = AppState::from(
@@ -193,6 +205,7 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> + use<> {
                     "ptan" => Explorer::PointTangent(ptan::AppState::default()),
                     "coprop" => Explorer::Coproportional(coprop::AppState::default()),
                     "q0q1" => Explorer::Q0Q1(q0q1::AppState::default()),
+                    "ladder_alt" => Explorer::LadderAlt(ladder_alt::AppState::default()),
                     _ => unreachable!(),
                 },
             )
