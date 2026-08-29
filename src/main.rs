@@ -92,12 +92,12 @@ impl Explorer {
 
     fn refresh(&mut self) {
         match self {
-            Explorer::HyperParams(e) => *e = hyperparams::AppState::default(),
-            Explorer::ThetaKappa(e) => *e = hyper_theta_kappa::AppState::default(),
-            Explorer::EulerApprox(e) => *e = euler_approx::AppState::default(),
-            Explorer::PointTangent(e) => *e = ptan::AppState::default(),
-            Explorer::Coproportional(e) => *e = coprop::AppState::default(),
-            Explorer::Q0Q1(e) => *e = q0q1::AppState::default(),
+            Explorer::HyperParams(e) => e.data = hyperparams::AppData::default(),
+            Explorer::ThetaKappa(e) => e.data = hyper_theta_kappa::AppData::default(),
+            Explorer::EulerApprox(e) => e.data = euler_approx::AppData::default(),
+            Explorer::PointTangent(e) => e.data = ptan::AppData::default(),
+            Explorer::Coproportional(e) => e.data = coprop::AppData::default(),
+            Explorer::Q0Q1(e) => e.data = q0q1::AppData::default(),
         }
     }
 
