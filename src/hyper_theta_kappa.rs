@@ -1,4 +1,4 @@
-use std::{f64, fmt::Write, rc::Rc};
+use std::{f64, rc::Rc};
 
 use wasm_bindgen::JsCast;
 use xilem_web::{
@@ -9,11 +9,12 @@ use xilem_web::{
         svg::g,
     },
     interfaces::*,
-    svg::kurbo::{self, Affine, Circle, Line, ParamCurve, Point, Vec2},
+    svg::kurbo::{self, Affine, Circle, Line, Point, Vec2},
 };
 
 use hyperbez_toy::{utils::parse_param, *};
 
+use crate::common::*;
 use crate::components::*;
 
 #[derive(Default)]
@@ -66,8 +67,6 @@ impl From<AppData> for AppState {
         }
     }
 }
-
-const BASE_WIDTH: f64 = 500.;
 
 impl std::str::FromStr for AppData {
     type Err = Box<dyn std::error::Error>;
@@ -124,12 +123,9 @@ impl std::fmt::Display for AppData {
             Arrangement::Antisymmetric => f.write_str("anti,"),
             Arrangement::Free => write!(f, "{theta1},{kappa1},"),
         }?;
-        f.write_char(if loopy { 'T' } else { 'F' })
+        f.write_str(if loopy { "T" } else { "F" })
     }
 }
-
-const P0: Point = Point::ZERO;
-const P3: Point = Point::new(BASE_WIDTH, 0.);
 
 impl Default for AppData {
     fn default() -> Self {
@@ -375,130 +371,22 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
 }
 
 pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> + use<> {
-    let MemoizedState {
-        hyperbez,
-        theta,
-        kappa,
-        frag_controls,
-        frag_path,
-        frag_points,
-        frag_results,
-        frag_options,
-    } = state.memo.try_update(state.data, memoized_app_logic);
+    let memo = state.memo.try_update(state.data, memoized_app_logic);
 
-    let mut hovered_point = None;
-    let mut hovered_theta = None;
-    let mut hovered_kappa = None;
-    let mut hover_mark = None;
-    if let Some(s) = state.plots.hovered_x {
-        hovered_point = Some(hyperbez.eval(s));
-        let i = (s * 1e3) as usize;
-        (hovered_theta, hovered_kappa) = (Some(theta[i]), Some(kappa[i]));
-        let (theta, kappa) = (theta[i].to_radians(), kappa[i]);
-
-        let p = hyperbez.eval(s);
-        let r_curv = hyperbez.scale_rot().length() / kappa;
-        let tangent_half = 0.25 * BASE_WIDTH * Vec2::from_angle(theta);
-        let tangent = Affine::FLIP_Y * Line::new(p - tangent_half, p + tangent_half);
-        let r_curv = Affine::FLIP_Y
-            * Line::new(
-                p,
-                p + r_curv * Vec2::from_angle(theta + std::f64::consts::FRAC_PI_2),
-            );
-
-        hover_mark = Some(
-            g((
-                tangent.id("tangent"),
-                r_curv.id("curvature"),
-                Circle::new(Affine::FLIP_Y * p, 3.),
-            ))
-            .class("hover"),
-        );
-    };
-
-    let empty = "~".to_string();
-    let frag_hovered_s = labeled_valued(
-        "s: ",
-        (),
-        state
-            .plots
-            .hovered_x
-            .map_or(empty.clone(), |s| format!("{:.3}", s)),
-    );
-    let frag_hovered_p_x = labeled_valued(
-        ("P", html::sub("x"), "(s): "),
-        (),
-        hovered_point.map_or(empty.clone(), |v| format!("{:.2}", v.x)),
-    );
-    let frag_hovered_p_y = labeled_valued(
-        ("P", html::sub("y"), "(s): "),
-        (),
-        hovered_point.map_or(empty.clone(), |v| format!("{:.2}", v.y)),
-    );
-    let frag_hovered_theta = labeled_valued(
-        "θ(s): ",
-        (),
-        hovered_theta.map_or(empty.clone(), |v| format!("{:.1}°", v)),
-    );
-    let frag_hovered_kappa = labeled_valued(
-        "κ(s): ",
-        (),
-        hovered_kappa.map_or(empty.clone(), |v| format!("{:.2}", v)),
-    );
-
-    let frag_results = (
-        frag_results.clone(),
-        div((
-            frag_hovered_s,
-            frag_hovered_p_x,
-            frag_hovered_p_y,
-            frag_hovered_theta,
-            frag_hovered_kappa,
-        ))
-        .class("results"),
-    );
-
-    let frag_plots = state
-        .plots
-        .view(theta, kappa)
-        .map_state(|state: &mut AppState| &mut state.plots);
-
-    let frag_svg = state
-        .sheet
-        .view((
-            frag_controls.clone(),
-            frag_path.clone(),
-            hover_mark,
-            frag_points.clone(),
-        ))
-        .map_state(|state: &mut AppState| &mut state.sheet)
-        .map_action(
-            |state: &mut AppState, sheet::DragAction { handle, point }| {
-                match handle {
-                    sheet::Handle::C0 => state.data.theta0 = point.to_vec2().angle(),
-                    sheet::Handle::C1 => {
-                        state.data.theta1 =
-                            (Point::new(BASE_WIDTH, 0.) - Affine::FLIP_Y * point).angle()
-                    }
-                };
-                state.data.maintain_arrangement(handle);
-            },
-        )
-        .map_message_result(bridge_hover!());
-
-    div((
-        div((
-            div((
-                frag_options
-                    .clone()
-                    .map_state(|state: &mut AppState| &mut state.data),
-                frag_results,
-            ))
-            .id("ui"),
-            frag_plots,
-        ))
-        .id("pane-left"),
-        frag_svg,
-    ))
-    .id("app-root")
+    app_view!(
+        state,
+        memo,
+        (memo.frag_results.clone()),
+        (memo.frag_controls.clone()),
+        |state: &mut AppState, sheet::DragAction { handle, point }| {
+            match handle {
+                sheet::Handle::C0 => state.data.theta0 = point.to_vec2().angle(),
+                sheet::Handle::C1 => {
+                    state.data.theta1 =
+                        (Point::new(BASE_WIDTH, 0.) - Affine::FLIP_Y * point).angle()
+                }
+            };
+            state.data.maintain_arrangement(handle);
+        }
+    )
 }

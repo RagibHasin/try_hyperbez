@@ -11,6 +11,7 @@ use xilem_web::{
     interfaces::{Element, HtmlOptionElement},
 };
 
+pub mod common;
 pub mod components;
 
 mod coprop;
