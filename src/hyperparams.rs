@@ -192,7 +192,6 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let kappa0 = *kappa.first().unwrap();
     let kappa1 = *kappa.last().unwrap();
 
-    const NODE_RADIUS: f64 = 5.;
     let points = path
         .elements()
         .iter()
@@ -239,32 +238,16 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     ))
     .class("results");
 
-    let frag_a = labeled_valued(
-        "a: ",
-        slider(data.a, -20., 20., 0.2).map_state(|data: &mut AppData| &mut data.a),
-        textbox(data.a).map_state(|data: &mut AppData| &mut data.a),
-    );
-    let frag_b = labeled_valued(
-        "b: ",
-        slider(data.b, -20., 20., 0.2).map_state(|data: &mut AppData| &mut data.b),
-        textbox(data.b).map_state(|data: &mut AppData| &mut data.b),
-    );
-    let frag_c = labeled_valued(
-        "c: ",
-        slider(data.c, -10., 10., 0.1).map_state(|data: &mut AppData| &mut data.c),
-        textbox(data.c).map_state(|data: &mut AppData| &mut data.c),
-    );
-    let frag_d_m = labeled_valued(
-        html::span::<AppData, _, _>(if data.is_d { "d: " } else { "m: " })
+    let frag_a = labeled_slider!("a: ", AppData::data.a, -20., 20., 0.2);
+    let frag_b = labeled_slider!("b: ", AppData::data.b, -20., 20., 0.2);
+    let frag_c = labeled_slider!("c: ", AppData::data.c, -10., 10., 0.1);
+    let frag_d_m = labeled_slider!(
+        html::span(if data.is_d { "d: " } else { "m: " })
             .on_dblclick(|data: &mut AppData, _| data.toggle_is_d()),
-        slider(
-            data.d_m,
-            if data.is_d { d_limit.start } else { -3. },
-            if data.is_d { d_limit.end } else { -0.1 },
-            0.1,
-        )
-        .map_state(|data: &mut AppData| &mut data.d_m),
-        textbox(data.d_m).map_state(|data: &mut AppData| &mut data.d_m),
+        AppData::data.d_m,
+        if data.is_d { d_limit.start } else { -3. },
+        if data.is_d { d_limit.end } else { -0.1 },
+        0.1,
     );
 
     let frag_render_method = select((
@@ -298,12 +281,7 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
             _ => {}
         }
     });
-    let frag_accuracy = labeled_valued(
-        "log(α): ",
-        slider(data.accuracy_order, 1., 4., 1.)
-            .map_state(|data: &mut AppData| &mut data.accuracy_order),
-        data.accuracy_order,
-    );
+    let frag_accuracy = labeled_slider!("log(α): ", AppData::data.accuracy_order, 1., 4., 1.);
 
     let frag_options = div((
         frag_a,

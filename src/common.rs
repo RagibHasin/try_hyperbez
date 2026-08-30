@@ -1,6 +1,7 @@
 use xilem_web::svg::kurbo::Point;
 
 pub(crate) const BASE_WIDTH: f64 = 500.;
+pub(crate) const NODE_RADIUS: f64 = 5.;
 
 pub(crate) const P0: Point = Point::ZERO;
 pub(crate) const P3: Point = Point::new(BASE_WIDTH, 0.);
@@ -122,5 +123,38 @@ macro_rules! app_view {
         .id("app-root")
     }};
 }
-
 pub(crate) use app_view;
+
+macro_rules! labeled_textbox {
+    ($label:expr, $data_ty:ident :: $data:ident $(.$f:ident)+) => {
+        labeled_valued(
+            $label,
+            div(()),
+            textbox($data $(.$f)*).map_state(|data: &mut $data_ty| &mut data $(.$f)*),
+        )
+    };
+    ($label:expr, $data_ty:ident :: $data:ident $(.$f:ident)+, |$map_data:ident| $map_op:stmt) => {
+        labeled_valued(
+            $label,
+            div(()),
+            textbox($data $(.$f)*)
+                .map_state(|data: &mut $data_ty| &mut data $(.$f)*)
+                .map_message_result(|$map_data: &mut $data_ty, r| {
+                    $map_op
+                    r
+                }),
+        )
+    };
+}
+pub(crate) use labeled_textbox;
+
+macro_rules! labeled_slider {
+    ($label:expr, $data_ty:ident :: $data:ident $(.$f:ident)+, $($slider_params:tt)*) => {
+        labeled_valued(
+            $label,
+            slider($data $(.$f)*, $($slider_params)*).map_state(|data: &mut $data_ty| &mut data $(.$f)*),
+            textbox($data $(.$f)*).map_state(|data: &mut $data_ty| &mut data $(.$f)*),
+        )
+    };
+}
+pub(crate) use labeled_slider;

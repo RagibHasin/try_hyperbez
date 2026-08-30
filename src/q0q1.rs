@@ -135,7 +135,6 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let kappa0 = *kappa.first().unwrap();
     let kappa1 = *kappa.last().unwrap();
 
-    const NODE_RADIUS: f64 = 5.;
     let points = path
         .elements()
         .iter()
@@ -198,37 +197,13 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     ))
     .class("results");
 
-    let frag_p1_x = labeled_valued(
-        ("P1", html::sub("x"), ": "),
-        div(()),
-        textbox(data.p1.x).map_state(|data: &mut AppData| &mut data.p1.x),
-    );
-    let frag_p1_y = labeled_valued(
-        ("P1", html::sub("y"), ": "),
-        div(()),
-        textbox(data.p1.y).map_state(|data: &mut AppData| &mut data.p1.y),
-    );
-    let frag_p2_x = labeled_valued(
-        ("P2", html::sub("x"), ": "),
-        div(()),
-        textbox(data.p2.x).map_state(|data: &mut AppData| &mut data.p2.x),
-    );
-    let frag_p2_y = labeled_valued(
-        ("P2", html::sub("y"), ": "),
-        div(()),
-        textbox(data.p2.y).map_state(|data: &mut AppData| &mut data.p2.y),
-    );
+    let frag_p1_x = labeled_textbox!(("P1", html::sub("x"), ": "), AppData::data.p1.x);
+    let frag_p1_y = labeled_textbox!(("P1", html::sub("y"), ": "), AppData::data.p1.y);
+    let frag_p2_x = labeled_textbox!(("P2", html::sub("x"), ": "), AppData::data.p2.x);
+    let frag_p2_y = labeled_textbox!(("P2", html::sub("y"), ": "), AppData::data.p2.y);
 
-    let frag_param_k = labeled_valued(
-        "K: ",
-        slider(data.param_k, 2., 3., 0.02).map_state(|data: &mut AppData| &mut data.param_k),
-        textbox(data.param_k).map_state(|data: &mut AppData| &mut data.param_k),
-    );
-    let frag_param_c = labeled_valued(
-        "C: ",
-        slider(data.param_c, 0., 12., 0.2).map_state(|data: &mut AppData| &mut data.param_c),
-        textbox(data.param_c).map_state(|data: &mut AppData| &mut data.param_c),
-    );
+    let frag_param_k = labeled_slider!("K: ", AppData::data.param_k, 2., 3., 0.02);
+    let frag_param_c = labeled_slider!("C: ", AppData::data.param_c, 0., 12., 0.2);
 
     let frag_options = div((
         frag_p1_x,

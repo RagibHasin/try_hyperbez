@@ -198,7 +198,6 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
         .map(|t| hyperbez.kappa(t) * hyperbez.scale_rot().length())
         .collect::<Rc<_>>();
 
-    const NODE_RADIUS: f64 = 5.;
     let points = path
         .elements()
         .iter()
@@ -285,26 +284,12 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
                     r
                 }),
         );
-        let frag_kappa0 = labeled_valued(
-            "κ₀",
-            div(()),
-            textbox(data.kappa0)
-                .map_state(|data: &mut AppData| &mut data.kappa0)
-                .map_message_result(|data: &mut AppData, r| {
-                    data.maintain_arrangement(sheet::Handle::C0);
-                    r
-                }),
-        );
-        let frag_kappa1 = labeled_valued(
-            "κ₁",
-            div(()),
-            textbox(data.kappa1)
-                .map_state(|data: &mut AppData| &mut data.kappa1)
-                .map_message_result(|data: &mut AppData, r| {
-                    data.maintain_arrangement(sheet::Handle::C1);
-                    r
-                }),
-        );
+        let frag_kappa0 = labeled_textbox!("κ₀", AppData::data.kappa0, |data| {
+            data.maintain_arrangement(sheet::Handle::C0)
+        });
+        let frag_kappa1 = labeled_textbox!("κ₁", AppData::data.kappa1, |data| {
+            data.maintain_arrangement(sheet::Handle::C1)
+        });
 
         let frag_loopy = button(if data.loopy {
             "Remove loop"

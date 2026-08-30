@@ -186,7 +186,6 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let kappa0 = *kappa.first().unwrap();
     let kappa1 = *kappa.last().unwrap();
 
-    const NODE_RADIUS: f64 = 5.;
     let points = path
         .elements()
         .iter()
@@ -249,46 +248,18 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     ))
     .class("results");
 
-    let frag_p1_x = labeled_valued(
-        ("P1", html::sub("x"), ": "),
-        div(()),
-        textbox(data.p1.x)
-            .map_state(|data: &mut AppData| &mut data.p1.x)
-            .map_message_result(|data: &mut AppData, r| {
-                data.maintain_symmetry(sheet::Handle::C0);
-                r
-            }),
-    );
-    let frag_p1_y = labeled_valued(
-        ("P1", html::sub("y"), ": "),
-        div(()),
-        textbox(data.p1.y)
-            .map_state(|data: &mut AppData| &mut data.p1.y)
-            .map_message_result(|data: &mut AppData, r| {
-                data.maintain_symmetry(sheet::Handle::C0);
-                r
-            }),
-    );
-    let frag_p2_x = labeled_valued(
-        ("P2", html::sub("x"), ": "),
-        div(()),
-        textbox(data.p2.x)
-            .map_state(|data: &mut AppData| &mut data.p2.x)
-            .map_message_result(|data: &mut AppData, r| {
-                data.maintain_symmetry(sheet::Handle::C1);
-                r
-            }),
-    );
-    let frag_p2_y = labeled_valued(
-        ("P2", html::sub("y"), ": "),
-        div(()),
-        textbox(data.p2.y)
-            .map_state(|data: &mut AppData| &mut data.p2.y)
-            .map_message_result(|data: &mut AppData, r| {
-                data.maintain_symmetry(sheet::Handle::C1);
-                r
-            }),
-    );
+    let frag_p1_x = labeled_textbox!(("P1", html::sub("x"), ": "), AppData::data.p1.x, |data| {
+        data.maintain_symmetry(sheet::Handle::C0)
+    });
+    let frag_p1_y = labeled_textbox!(("P1", html::sub("y"), ": "), AppData::data.p1.y, |data| {
+        data.maintain_symmetry(sheet::Handle::C0)
+    });
+    let frag_p2_x = labeled_textbox!(("P2", html::sub("x"), ": "), AppData::data.p2.x, |data| {
+        data.maintain_symmetry(sheet::Handle::C1)
+    });
+    let frag_p2_y = labeled_textbox!(("P2", html::sub("y"), ": "), AppData::data.p2.y, |data| {
+        data.maintain_symmetry(sheet::Handle::C1)
+    });
 
     let frag_symmetric = button(if data.symmetric {
         "Make asymmetric"
