@@ -21,7 +21,7 @@ pub(crate) struct AppState {
     memo: Memoized<AppData, MemoizedState>,
 
     plots: plots::State,
-    sheet: sheet::State<Handle>,
+    sheet: sheet::State,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -36,7 +36,7 @@ pub(crate) struct AppData {
     param_c: f64,
 }
 
-type SheetElement = AnyDomView<sheet::State<Handle>, sheet::DragAction<Handle>>;
+type SheetElement = AnyDomView<sheet::State, sheet::DragAction>;
 
 struct MemoizedState {
     hyperbez: hb::Hyperbezier,
@@ -122,12 +122,6 @@ impl Default for AppData {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Handle {
-    P1,
-    P2,
-}
-
 fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let p0 = Point::ZERO;
     let p3 = Point::new(BASE_WIDTH, 0.);
@@ -182,8 +176,8 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let control0 = Affine::FLIP_Y * data.p1;
     let control0 = (
         Line::new((0., 0.), control0),
-        Circle::new(control0, NODE_RADIUS).on_mousedown(|state: &mut sheet::State<Handle>, e| {
-            state.set_drag(Some(Handle::P1));
+        Circle::new(control0, NODE_RADIUS).on_mousedown(|state: &mut sheet::State, e| {
+            state.set_drag_handle(Some(sheet::Handle::C0));
             e.stop_propagation();
         }),
     );
@@ -191,8 +185,8 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let control1 = Affine::FLIP_Y * data.p2;
     let control1 = (
         Line::new((BASE_WIDTH, 0.), control1),
-        Circle::new(control1, NODE_RADIUS).on_mousedown(|state: &mut sheet::State<Handle>, e| {
-            state.set_drag(Some(Handle::P2));
+        Circle::new(control1, NODE_RADIUS).on_mousedown(|state: &mut sheet::State, e| {
+            state.set_drag_handle(Some(sheet::Handle::C1));
             e.stop_propagation();
         }),
     );
@@ -407,10 +401,10 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> + use<> 
         ))
         .map_state(|state: &mut AppState| &mut state.sheet)
         .map_action(
-            move |state: &mut AppState, sheet::DragAction { data, point }| {
-                *match data {
-                    Handle::P1 => &mut state.data.p1,
-                    Handle::P2 => &mut state.data.p2,
+            |state: &mut AppState, sheet::DragAction { handle, point }| {
+                *match handle {
+                    sheet::Handle::C0 => &mut state.data.p1,
+                    sheet::Handle::C1 => &mut state.data.p2,
                 } = point;
             },
         )

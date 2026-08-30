@@ -22,7 +22,7 @@ pub(crate) struct AppState {
     memo: Memoized<AppData, MemoizedState>,
 
     plots: plots::State,
-    sheet: sheet::State<Handle>,
+    sheet: sheet::State,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -44,7 +44,7 @@ enum Arrangement {
     Free,
 }
 
-type SheetElement = AnyDomView<sheet::State<Handle>, sheet::DragAction<Handle>>;
+type SheetElement = AnyDomView<sheet::State, sheet::DragAction>;
 
 struct MemoizedState {
     hyperbez: hb::Hyperbezier,
@@ -146,24 +146,24 @@ impl Default for AppData {
 }
 
 impl AppData {
-    fn maintain_arrangement(&mut self, handle: Handle) {
+    fn maintain_arrangement(&mut self, handle: sheet::Handle) {
         match self.arrangement {
             Arrangement::Symmetric => match handle {
-                Handle::Theta0 => {
+                sheet::Handle::C0 => {
                     self.theta1 = self.theta0;
                     self.kappa1 = self.kappa0;
                 }
-                Handle::Theta1 => {
+                sheet::Handle::C1 => {
                     self.theta0 = self.theta1;
                     self.kappa0 = self.kappa1;
                 }
             },
             Arrangement::Antisymmetric => match handle {
-                Handle::Theta0 => {
+                sheet::Handle::C0 => {
                     self.theta1 = -self.theta0;
                     self.kappa1 = -self.kappa0;
                 }
-                Handle::Theta1 => {
+                sheet::Handle::C1 => {
                     self.theta0 = -self.theta1;
                     self.kappa0 = -self.kappa1;
                 }
@@ -171,12 +171,6 @@ impl AppData {
             Arrangement::Free => {}
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Handle {
-    Theta0,
-    Theta1,
 }
 
 fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Option<MemoizedState> {
@@ -217,30 +211,24 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
         .collect::<Vec<_>>();
     let n_points = points.len();
 
-    fn frag_controls(
-        data: &AppData,
-    ) -> impl DomView<sheet::State<Handle>, sheet::DragAction<Handle>> + use<> {
+    fn frag_controls(data: &AppData) -> impl DomView<sheet::State, sheet::DragAction> + use<> {
         const CONTROL_LENGTH: f64 = 100.;
         let control0 = Affine::FLIP_Y * (CONTROL_LENGTH * Vec2::from_angle(data.theta0)).to_point();
         let control0 = (
             Line::new((0., 0.), control0),
-            Circle::new(control0, NODE_RADIUS).on_mousedown(
-                |state: &mut sheet::State<Handle>, e| {
-                    state.set_drag(Some(Handle::Theta0));
-                    e.stop_propagation();
-                },
-            ),
+            Circle::new(control0, NODE_RADIUS).on_mousedown(|state: &mut sheet::State, e| {
+                state.set_drag_handle(Some(sheet::Handle::C0));
+                e.stop_propagation();
+            }),
         );
 
         let control1 = Affine::FLIP_Y * (P3 - CONTROL_LENGTH * Vec2::from_angle(-data.theta1));
         let control1 = (
             Line::new(P3, control1),
-            Circle::new(control1, NODE_RADIUS).on_mousedown(
-                |state: &mut sheet::State<Handle>, e| {
-                    state.set_drag(Some(Handle::Theta1));
-                    e.stop_propagation();
-                },
-            ),
+            Circle::new(control1, NODE_RADIUS).on_mousedown(|state: &mut sheet::State, e| {
+                state.set_drag_handle(Some(sheet::Handle::C1));
+                e.stop_propagation();
+            }),
         );
 
         g((control0, control1)).class("control")
@@ -286,7 +274,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
                 .map_state(|data: &mut AppData| &mut data.theta0)
                 .map_message_result(|data: &mut AppData, r| {
                     data.theta0 = data.theta0.to_radians();
-                    data.maintain_arrangement(Handle::Theta0);
+                    data.maintain_arrangement(sheet::Handle::C0);
                     r
                 }),
         );
@@ -297,7 +285,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
                 .map_state(|data: &mut AppData| &mut data.theta1)
                 .map_message_result(|data: &mut AppData, r| {
                     data.theta1 = data.theta1.to_radians();
-                    data.maintain_arrangement(Handle::Theta1);
+                    data.maintain_arrangement(sheet::Handle::C1);
                     r
                 }),
         );
@@ -307,7 +295,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
             textbox(data.kappa0)
                 .map_state(|data: &mut AppData| &mut data.kappa0)
                 .map_message_result(|data: &mut AppData, r| {
-                    data.maintain_arrangement(Handle::Theta0);
+                    data.maintain_arrangement(sheet::Handle::C0);
                     r
                 }),
         );
@@ -317,7 +305,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
             textbox(data.kappa1)
                 .map_state(|data: &mut AppData| &mut data.kappa1)
                 .map_message_result(|data: &mut AppData, r| {
-                    data.maintain_arrangement(Handle::Theta1);
+                    data.maintain_arrangement(sheet::Handle::C1);
                     r
                 }),
         );
@@ -353,7 +341,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
                 "Free" => data.arrangement = Arrangement::Free,
                 _ => {}
             }
-            data.maintain_arrangement(Handle::Theta0);
+            data.maintain_arrangement(sheet::Handle::C0);
         });
 
         let frag_running = button(if data.running { "Pause" } else { "Resume" })
@@ -485,15 +473,15 @@ pub(crate) fn app_logic(state: &mut AppState) -> impl DomView<AppState> + use<> 
         ))
         .map_state(|state: &mut AppState| &mut state.sheet)
         .map_action(
-            move |state: &mut AppState, sheet::DragAction { data, point }| {
-                match data {
-                    Handle::Theta0 => state.data.theta0 = point.to_vec2().angle(),
-                    Handle::Theta1 => {
+            |state: &mut AppState, sheet::DragAction { handle, point }| {
+                match handle {
+                    sheet::Handle::C0 => state.data.theta0 = point.to_vec2().angle(),
+                    sheet::Handle::C1 => {
                         state.data.theta1 =
                             (Point::new(BASE_WIDTH, 0.) - Affine::FLIP_Y * point).angle()
                     }
                 };
-                state.data.maintain_arrangement(data);
+                state.data.maintain_arrangement(handle);
             },
         )
         .map_message_result(bridge_hover!());

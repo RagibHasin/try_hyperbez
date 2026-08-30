@@ -12,15 +12,15 @@ use xilem_web::{
 };
 
 #[derive(Debug, PartialEq)]
-pub struct State<DragData = NoData> {
+pub struct State {
     size: Size,
     origin: Point,
     zoom: f64,
-    drag: DragElement<DragData>,
+    drag: DragElement,
     hovered_pt: Option<Point>,
 }
 
-impl<O> Default for State<O> {
+impl Default for State {
     fn default() -> Self {
         Self {
             size: Size::new(1200., 900.),
@@ -33,24 +33,30 @@ impl<O> Default for State<O> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DragElement<O = NoData> {
+pub enum DragElement {
     None,
     Sheet,
-    Other(O),
+    Handle(Handle),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Handle {
+    C0,
+    C1,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DragAction<O = NoData> {
-    pub data: O,
+pub struct DragAction {
+    pub handle: Handle,
     pub point: Point,
 }
-impl<O> Action for DragAction<O> {}
+impl Action for DragAction {}
 
-impl<DragData: Copy + 'static> State<DragData> {
-    pub fn view<Children: DomFragment<Self, DragAction<DragData>>>(
+impl State {
+    pub fn view<Children: DomFragment<Self, DragAction>>(
         &mut self,
         children: Children,
-    ) -> impl DomView<Self, DragAction<DragData>> + use<DragData, Children> {
+    ) -> impl DomView<Self, DragAction> + use<Children> {
         let sheet_size = self.zoom * self.size;
         let sheet = svg(children)
             .attr(
@@ -68,7 +74,10 @@ impl<DragData: Copy + 'static> State<DragData> {
                     * Point::new(e.offset_x() as f64, e.offset_y() as f64);
                 state.hovered_pt = Some(p);
                 match state.drag {
-                    DragElement::Other(data) => Some(DragAction { data, point: p }),
+                    DragElement::Handle(data) => Some(DragAction {
+                        handle: data,
+                        point: p,
+                    }),
                     DragElement::Sheet => {
                         let delta =
                             state.zoom * Vec2::new(e.movement_x() as f64, e.movement_y() as f64);
@@ -130,14 +139,11 @@ impl<DragData: Copy + 'static> State<DragData> {
         self.hovered_pt
     }
 
-    pub fn set_drag(&mut self, e: Option<DragData>) {
-        self.drag = if let Some(e) = e {
-            DragElement::Other(e)
+    pub fn set_drag_handle(&mut self, handle: Option<Handle>) {
+        self.drag = if let Some(handle) = handle {
+            DragElement::Handle(handle)
         } else {
             DragElement::None
         }
     }
 }
-
-#[derive(Debug, Clone, Copy)]
-pub enum NoData {}
