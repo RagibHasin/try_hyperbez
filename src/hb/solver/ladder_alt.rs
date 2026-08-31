@@ -18,7 +18,7 @@ use super::*;
 /// (again by linearity). Init 2 is the small-angle/Euler formula. A
 /// converged solution whose interior theta excursion leaves the principal
 /// band (a hidden +-2pi round trip) is rejected and the next init tried.
-fn fit_ab(c: f64, d: f64, l0: Vec2, l1: Vec2) -> (Option<[f64; 2]>, String) {
+fn fit_ab(c: f64, d: f64, l0: Vec2, l1: Vec2) -> Result<[f64; 2], String> {
     let f = HyperbezParams::new(1., 0., c, d);
     let g = HyperbezParams::new(0., 1., c, d);
     let f_1 = f.theta(1.);
@@ -28,7 +28,7 @@ fn fit_ab(c: f64, d: f64, l0: Vec2, l1: Vec2) -> (Option<[f64; 2]>, String) {
     let dth = th1 - th0;
 
     if g_1.abs() < 1e-30 {
-        return (None, "g(1) vanished".into());
+        return Err("g(1) vanished".into());
     }
 
     let b = |a| (dth - a * f_1) / g_1;
@@ -114,12 +114,9 @@ fn fit_ab(c: f64, d: f64, l0: Vec2, l1: Vec2) -> (Option<[f64; 2]>, String) {
     let det = f_h * g_1 - g_h * f_1;
 
     if det.abs() > 1e-300 {
-        match solve_step((th_h * g_1 - g_h * dth) / det) {
-            Ok(ab) => (Some(ab), String::new()),
-            Err(e) => (None, e),
-        }
+        solve_step((th_h * g_1 - g_h * dth) / det)
     } else {
-        (None, "determinant vanished".into())
+        Err("determinant vanished".into())
     }
 }
 
@@ -150,25 +147,32 @@ pub fn solve(
     param_eps: f64,
     param_l: f64,
     param_k: f64,
-    param_c: f64,
-) -> (Option<HyperbezParams<f64>>, String) {
+) -> Result<HyperbezParams<f64>, String> {
     let l0 = cb.p1.to_vec2();
     let l1 = cb.p3 - cb.p2;
 
-    let [q0, q1] = [l0, l1].map(|l| {
-        let u = param_u0 + l.length() * (1. + param_eps.exp2() + l.angle().cos());
-        let lg_u = u.log2();
-        let x = param_k * lg_u + param_c * lg_u.max(0.).powi(3);
-        let lg_q = x / (1. + (x / param_l).powi(4)).powf(0.25);
-        lg_q.exp2()
-    });
+    let mut err = String::new();
+    for i in 0..14 {
+        let loosening = 0.98.powi(i);
 
-    let qm = 1. / q0.sqrt() + 1. / q1.sqrt() - (q0 * q1).sqrt();
+        let [q0, q1] = [l0, l1].map(|l| {
+            let u = param_u0 + l.length() * (1. + param_eps.exp2() + l.angle().cos());
+            let lg_u = u.log2();
+            let x = param_k * lg_u * loosening;
+            let lg_q = x / (1. + (x / param_l).powi(4)).powf(0.25);
+            lg_q.exp2()
+        });
 
-    let c = (q0 - 2. * qm + q1) / q0;
-    let d = 2. * (qm - q0) / q0;
+        let qm = 1. / q0.sqrt() + 1. / q1.sqrt() - (q0 * q1).sqrt();
 
-    let (ab, comment) = fit_ab(c, d, l0, l1);
+        let c = (q0 - 2. * qm + q1) / q0;
+        let d = 2. * (qm - q0) / q0;
 
-    (ab.map(|[a, b]| HyperbezParams::new(a, b, c, d)), comment)
+        match fit_ab(c, d, l0, l1) {
+            Ok([a, b]) => return Ok(HyperbezParams::new(a, b, c, d)),
+            Err(e) => err = e,
+        }
+    }
+
+    Err(err)
 }
