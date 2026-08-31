@@ -309,7 +309,7 @@ fn memoized_app_logic(data: &AppData, memo: Option<&mut MemoizedState>) -> Optio
                 .value("Free")
                 .selected(matches!(data.arrangement, Arrangement::Free)),
         ))
-        .on_change(move |data: &mut AppData, e| {
+        .on_change(|data: &mut AppData, e| {
             match e
                 .target()
                 .unwrap()

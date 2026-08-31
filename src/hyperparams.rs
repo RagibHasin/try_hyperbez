@@ -267,7 +267,7 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
             .value("SubdivisionSolve")
             .selected(matches!(data.render_method, RenderMethod::SubdivisionSolve)),
     ))
-    .on_change(move |data: &mut AppData, e| {
+    .on_change(|data: &mut AppData, e| {
         match e
             .target()
             .unwrap()

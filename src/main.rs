@@ -221,7 +221,7 @@ fn app_logic(state: &mut AppState) -> impl DomFragment<AppState> + use<> {
     (
         fork(
             app,
-            task::<_, _, _, AppState, _, _>(
+            task(
                 |proxy, _| async {
                     let callback: Closure<dyn Fn(web_sys::Event)> =
                         Closure::new(move |_| proxy.send_message(()));

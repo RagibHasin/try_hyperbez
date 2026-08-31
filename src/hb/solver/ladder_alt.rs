@@ -89,7 +89,7 @@ fn integrate(a: f64, b: f64, c: f64, d: f64, t: f64, theta: impl Fn(f64) -> f64)
 /// (again by linearity). Init 2 is the small-angle/Euler formula. A
 /// converged solution whose interior theta excursion leaves the principal
 /// band (a hidden +-2pi round trip) is rejected and the next init tried.
-fn fit_ab(c: f64, d: f64, l0: Vec2, l1: Vec2) -> Option<[f64; 2]> {
+fn fit_ab(c: f64, d: f64, l0: Vec2, l1: Vec2) -> (Option<[f64; 2]>, String) {
     let f = HyperbezParams::new(1., 0., c, d);
     let g = HyperbezParams::new(0., 1., c, d);
     let f_1 = f.theta(1.);
@@ -99,12 +99,12 @@ fn fit_ab(c: f64, d: f64, l0: Vec2, l1: Vec2) -> Option<[f64; 2]> {
     let dth = th1 - th0;
 
     if g_1.abs() < 1e-30 {
-        return None;
+        return (None, "g(1) vanished".into());
     }
 
     let b = |a| (dth - a * f_1) / g_1;
 
-    let r1 = |a| {
+    let residual = |a| {
         let b = b(a);
         let theta = |t| a * f.theta(t) + b * g.theta(t);
         let integral = integrate(a, b, c, d, 1., theta);
@@ -112,31 +112,31 @@ fn fit_ab(c: f64, d: f64, l0: Vec2, l1: Vec2) -> Option<[f64; 2]> {
     };
 
     let solve_step = |mut a| {
-        let mut r = r1(a)?;
+        let mut residue = residual(a).ok_or("integral vanished")?;
 
         for _ in 0..30 {
-            if r.abs() < 1e-11 {
+            if residue.abs() < 1e-11 {
                 break;
             }
             let h = 1e-7 * a.abs().max(1.);
-            let Some(rp) = r1(a + h) else {
-                r = 1.;
+            let Some(residue_next) = residual(a + h) else {
+                residue = 1.;
                 break;
             };
-            let dr = (rp - r) / h;
+            let dr = (residue_next - residue) / h;
             if dr == 0. {
-                r = 1.;
+                residue = 1.;
                 break;
             }
-            let step = -r / dr;
+            let step = -residue / dr;
             let mut lam = 1.;
             let mut ok = false;
             for _ in 0..12 {
-                if let Some(rn) = r1(a + lam * step)
-                    && rn.abs() < r.abs()
+                if let Some(rn) = residual(a + lam * step)
+                    && rn.abs() < residue.abs()
                 {
                     a += lam * step;
-                    r = rn;
+                    residue = rn;
                     ok = true;
                     break;
                 }
@@ -147,8 +147,8 @@ fn fit_ab(c: f64, d: f64, l0: Vec2, l1: Vec2) -> Option<[f64; 2]> {
             }
         }
 
-        if r.abs() >= 1e-8 {
-            return None;
+        if residue.abs() >= 1e-8 {
+            return Err(format!("residue: {residue}"));
         }
 
         let b = b(a);
@@ -160,11 +160,11 @@ fn fit_ab(c: f64, d: f64, l0: Vec2, l1: Vec2) -> Option<[f64; 2]> {
                 if !(dth.min(0.) - f64::consts::PI - 0.3 < ex
                     && ex < dth.max(0.) + f64::consts::PI + 0.3)
                 {
-                    return None;
+                    return Err("loop".into());
                 }
             }
         }
-        Some([a, b])
+        Ok([a, b])
     };
 
     // init ladder: midpoint-tangent informed (closed-form 2x2), then Euler
@@ -179,13 +179,20 @@ fn fit_ab(c: f64, d: f64, l0: Vec2, l1: Vec2) -> Option<[f64; 2]> {
     let g_h = g.theta(0.5);
     let det = f_h * g_1 - g_h * f_1;
 
-    (det.abs() > 1e-10 * (f_h * g_1).abs().max((g_h * f_1).abs()).max(1e-300))
-        .then(|| solve_step((estg * g_1 - g_h * dth) / det))
-        .flatten()
-        .or_else(|| {
-            tracing::trace!("midpoint-tangent failed");
-            solve_step(6. * (th0 + th1))
-        })
+    if det.abs() > 1e-10 * (f_h * g_1).abs().max((g_h * f_1).abs()).max(1e-300) {
+        match solve_step((estg * g_1 - g_h * dth) / det) {
+            Ok(ab) => (Some(ab), String::new()),
+            Err(e) => match solve_step(6. * (th0 + th1)) {
+                Ok(ab) => (Some(ab), format!("midpoint-tangent failed: {e}")),
+                Err(e2) => (
+                    None,
+                    format!("midpoint-tangent failed: {e}, euler approx failed: {e2}"),
+                ),
+            },
+        }
+    } else {
+        (None, "determinant vanished".into())
+    }
 }
 
 /// The control-polygon -> hyperbezier map.
@@ -216,7 +223,7 @@ pub fn solve(
     param_l: f64,
     param_k: f64,
     param_c: f64,
-) -> Option<HyperbezParams<f64>> {
+) -> (Option<HyperbezParams<f64>>, String) {
     let l0 = cb.p1.to_vec2();
     let l1 = cb.p3 - cb.p2;
 
@@ -233,7 +240,7 @@ pub fn solve(
     let c = (q0 - 2. * qm + q1) / q0;
     let d = 2. * (qm - q0) / q0;
 
-    let [a, b] = fit_ab(c, d, l0, l1)?;
+    let (ab, comment) = fit_ab(c, d, l0, l1);
 
-    Some(HyperbezParams::new(a, b, c, d))
+    (ab.map(|[a, b]| HyperbezParams::new(a, b, c, d)), comment)
 }

@@ -125,15 +125,16 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let scale_down = kurbo::TranslateScale::scale(1. / BASE_WIDTH);
     let cubicbez = kurbo::CubicBez::new(P0, data.p1, data.p2, P3);
 
-    let params = hb::solver::ladder_alt::solve(
+    let (params, comment) = hb::solver::ladder_alt::solve(
         scale_down * cubicbez,
         data.param_u0,
         data.param_eps,
         data.param_l,
         data.param_k,
         data.param_c,
-    )
-    .unwrap_or_else(|| {
+    );
+    tracing::trace!(comment);
+    let params = params.unwrap_or_else(|| {
         hb::HyperbezParams::from_control(scale_down * data.p1, scale_down * data.p2)
     });
     let hyperbez = hb::Hyperbezier::from_points_params(params, P0, P3);
