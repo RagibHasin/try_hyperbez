@@ -6,77 +6,6 @@ use crate::utils::*;
 
 use super::*;
 
-/// Cut list for piecewise integration: curvature extrema, plus a geometric
-/// ladder of cuts around a deep minimum of q (near-corner), where the
-/// q^(-3/2) factor makes theta vary on a scale ~ w0 = sqrt(q_min/c).
-fn cut_points(a: f64, b: f64, c: f64, d: f64, t: f64) -> Vec<f64> {
-    let mut cuts = HyperbezParams::new(a, b, c, d)
-        .kappa_extrema()
-        .into_iter()
-        .filter(|w| *w < t)
-        .collect::<Vec<_>>();
-
-    if c > 1e-12 {
-        let tv = -0.5 * d / c;
-        if tv > 0. && tv < t {
-            let qv = (c * tv + d) * tv + 1.;
-            if qv < 0.05 {
-                let w0 = (qv.max(1e-300) / c).sqrt();
-                cuts.push(tv);
-                let mut k = 3.;
-                while k * w0 < 0.5 {
-                    if tv - k * w0 > 0. && tv - k * w0 < t {
-                        cuts.push(tv - k * w0);
-                    }
-                    if tv + k * w0 > 0. && tv + k * w0 < t {
-                        cuts.push(tv + k * w0);
-                    }
-                    k *= 3.;
-                }
-            }
-        }
-    }
-
-    cuts.extend([0., t]);
-    cuts.sort_by(f64::total_cmp);
-    cuts
-}
-
-/// Position integral z(t) = integral_0^t e^(i*theta) ds. GL-32 per cut
-/// interval; intervals not starting at 0 are re-expressed via subseg so
-/// each gets a fresh, well-conditioned chart.
-fn integrate(a: f64, b: f64, c: f64, d: f64, t: f64, theta: impl Fn(f64) -> f64) -> Vec2 {
-    //   theta = theta || makeTheta(a, b, c, d);
-    let pts = cut_points(a, b, c, d, t);
-    let mut z = Vec2::ZERO;
-
-    for [w0, w1] in pts.array_windows().copied() {
-        if w1 - w0 < 1e-15 {
-            continue;
-        }
-        if w0 == 0. {
-            let mut s = Vec2::ZERO;
-            for (wi, xi) in GAUSS_LEGENDRE_COEFFS_32 {
-                let u = 0.5 * w1 * (*xi + 1.);
-                let th = theta(u);
-                s += *wi * Vec2::from_angle(th);
-            }
-            z += 0.5 * w1 * s;
-        } else {
-            let sp = HyperbezParams::new(a, b, c, d).subsegment(w0..w1);
-            let off = theta(w0);
-            let mut s = Vec2::ZERO;
-            for (wi, xi) in GAUSS_LEGENDRE_COEFFS_32 {
-                let u = 0.5 * w1 * (*xi + 1.);
-                let th = off + sp.theta(u);
-                s += *wi * Vec2::from_angle(th);
-            }
-            z += 0.5 * (w1 - w0) * s;
-        }
-    }
-    z
-}
-
 /// Given the denominator quadratic (c,d), solve (a,b) so the curve interpolates the
 /// endpoint tangents (G1). theta is linear in (a,b), so the net turn
 /// theta(1) = a*F(1) + b*G(1) = th1 - th0 eliminates b exactly -- and
@@ -104,47 +33,52 @@ fn fit_ab(c: f64, d: f64, l0: Vec2, l1: Vec2) -> (Option<[f64; 2]>, String) {
 
     let b = |a| (dth - a * f_1) / g_1;
 
-    let residual = |a| {
-        let b = b(a);
-        let theta = |t| a * f.theta(t) + b * g.theta(t);
-        let integral = integrate(a, b, c, d, 1., theta);
-        (integral.hypot() >= 1e-12).then(|| norm_radians(-integral.atan2() - th0))
+    let residual = |a: f64| {
+        num_dual::first_derivative(
+            |a| {
+                let b = (-a * f_1 + dth) / g_1;
+                let p1 = HyperbezParams::new(a, b, c.into(), d.into()).integrate(1f64.into());
+                if p1.x == 0. || p1.y == 0. {
+                    f64::NAN.into()
+                } else {
+                    norm_radians(-p1.y.atan2(p1.x) - th0)
+                }
+            },
+            a,
+        )
     };
 
     let solve_step = |mut a| {
-        let mut residue = residual(a).ok_or("integral vanished")?;
+        let mut residue = 1.;
+        let mut derivative;
+        // if residue.is_nan() {
+        //     return Err("integral vanished".to_string());
+        // }
 
-        for _ in 0..30 {
+        'newt: for i in 0..30 {
+            (residue, derivative) = residual(a);
             if residue.abs() < 1e-11 {
+                tracing::trace!(i, "converged");
                 break;
             }
-            let h = 1e-7 * a.abs().max(1.);
-            let Some(residue_next) = residual(a + h) else {
+            if derivative == 0. {
                 residue = 1.;
-                break;
-            };
-            let dr = (residue_next - residue) / h;
-            if dr == 0. {
-                residue = 1.;
+                tracing::trace!(i, "diverged");
                 break;
             }
-            let step = -residue / dr;
-            let mut lam = 1.;
-            let mut ok = false;
-            for _ in 0..12 {
-                if let Some(rn) = residual(a + lam * step)
-                    && rn.abs() < residue.abs()
-                {
-                    a += lam * step;
-                    residue = rn;
-                    ok = true;
-                    break;
+            let newton_step = -residue / derivative;
+            for j in 0..12 {
+                let damping = 2f64.powi(-j);
+                let new_a = a + damping * newton_step;
+                let (new_residue, _) = residual(new_a);
+                if !new_residue.is_nan() && new_residue.abs() < residue.abs() {
+                    a = new_a;
+                    residue = new_residue;
+                    continue 'newt;
                 }
-                lam *= 0.5;
             }
-            if !ok {
-                break;
-            }
+            tracing::trace!(i, "didn't make progress");
+            break;
         }
 
         if residue.abs() >= 1e-8 {
@@ -169,26 +103,20 @@ fn fit_ab(c: f64, d: f64, l0: Vec2, l1: Vec2) -> (Option<[f64; 2]>, String) {
 
     // init ladder: midpoint-tangent informed (closed-form 2x2), then Euler
     let dr = Vec2::new(2., 0.) - l0.normalize() - l1.normalize();
-    let raw = if dr.hypot() > 1e-9 {
-        -dr.atan2()
+    let adj = if dr == Vec2::ZERO {
+        0.
     } else {
-        th0 + 0.5 * dth
+        norm_radians(-dr.atan2() - th0 - 0.5 * dth)
     };
-    let estg = 0.5 * dth + norm_radians(raw - th0 - 0.5 * dth);
+    let th_h = 0.5 * dth + adj;
     let f_h = f.theta(0.5);
     let g_h = g.theta(0.5);
     let det = f_h * g_1 - g_h * f_1;
 
-    if det.abs() > 1e-10 * (f_h * g_1).abs().max((g_h * f_1).abs()).max(1e-300) {
-        match solve_step((estg * g_1 - g_h * dth) / det) {
+    if det.abs() > 1e-300 {
+        match solve_step((th_h * g_1 - g_h * dth) / det) {
             Ok(ab) => (Some(ab), String::new()),
-            Err(e) => match solve_step(6. * (th0 + th1)) {
-                Ok(ab) => (Some(ab), format!("midpoint-tangent failed: {e}")),
-                Err(e2) => (
-                    None,
-                    format!("midpoint-tangent failed: {e}, euler approx failed: {e2}"),
-                ),
-            },
+            Err(e) => (None, e),
         }
     } else {
         (None, "determinant vanished".into())
@@ -228,11 +156,11 @@ pub fn solve(
     let l1 = cb.p3 - cb.p2;
 
     let [q0, q1] = [l0, l1].map(|l| {
-        let u = param_u0 + l.length() * 1.5 * (1. + param_eps.exp2() + l.angle().cos());
-        let ln_u = u.ln();
-        let x = param_k * ln_u + param_c * ln_u.max(0.).powi(3);
-        let ln_q = x / (1. + (x / param_l).powi(4)).powf(0.25);
-        ln_q.exp()
+        let u = param_u0 + l.length() * (1. + param_eps.exp2() + l.angle().cos());
+        let lg_u = u.log2();
+        let x = param_k * lg_u + param_c * lg_u.max(0.).powi(3);
+        let lg_q = x / (1. + (x / param_l).powi(4)).powf(0.25);
+        lg_q.exp2()
     });
 
     let qm = 1. / q0.sqrt() + 1. / q1.sqrt() - (q0 * q1).sqrt();
