@@ -147,6 +147,7 @@ pub fn solve(
     param_eps: f64,
     param_l: f64,
     param_k: f64,
+    param_c: f64,
 ) -> Result<HyperbezParams<f64>, String> {
     let l0 = cb.p1.to_vec2();
     let l1 = cb.p3 - cb.p2;
@@ -156,7 +157,7 @@ pub fn solve(
         let loosening = 0.98.powi(i);
 
         let [q0, q1] = [l0, l1].map(|l| {
-            let u = param_u0 + l.length() * (1. + param_eps.exp2() + l.angle().cos());
+            let u = param_u0 + l.length() * param_c * (1. + param_eps.exp2() + l.angle().cos());
             let lg_u = u.log2();
             let x = param_k * lg_u * loosening;
             let lg_q = x / (1. + (x / param_l).powi(4)).powf(0.25);
@@ -169,7 +170,10 @@ pub fn solve(
         let d = 2. * (qm - q0) / q0;
 
         match fit_ab(c, d, l0, l1) {
-            Ok([a, b]) => return Ok(HyperbezParams::new(a, b, c, d)),
+            Ok([a, b]) => {
+                tracing::trace!(i, "fitted");
+                return Ok(HyperbezParams::new(a, b, c, d));
+            }
             Err(e) => err = e,
         }
     }
