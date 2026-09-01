@@ -35,6 +35,7 @@ pub(crate) struct AppData {
     param_l: f64,
     param_k: f64,
     param_c: f64,
+    param_w: f64,
 }
 
 type SheetElement = AnyDomView<sheet::State, sheet::DragAction>;
@@ -76,6 +77,7 @@ impl std::str::FromStr for AppData {
         let param_l = parse_param(params, "param_l")?;
         let param_k = parse_param(params, "param_k")?;
         let param_c = parse_param(params, "param_c")?;
+        let param_w = parse_param(params, "param_w")?;
         Ok(AppData {
             p1: Point::new(p1_x, p1_y),
             p2: Point::new(p2_x, p2_y),
@@ -84,6 +86,7 @@ impl std::str::FromStr for AppData {
             param_l,
             param_k,
             param_c,
+            param_w,
         })
     }
 }
@@ -98,10 +101,11 @@ impl std::fmt::Display for AppData {
             param_l,
             param_k,
             param_c,
+            param_w,
         } = *self;
         write!(
             f,
-            "{},{},{},{},{param_u0},{param_eps},{param_l},{param_k},{param_c}",
+            "{},{},{},{},{param_u0},{param_eps},{param_l},{param_k},{param_c},{param_w}",
             p1.x, p1.y, p2.x, p2.y
         )
     }
@@ -117,6 +121,7 @@ impl Default for AppData {
             param_l: 8.,
             param_k: 2.,
             param_c: 1.5,
+            param_w: 0.25,
         }
     }
 }
@@ -132,6 +137,7 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
         data.param_l,
         data.param_k,
         data.param_c,
+        data.param_w,
     )
     .unwrap_or_else(|comment| {
         tracing::trace!(comment);
@@ -231,6 +237,7 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
     let frag_param_l = labeled_slider!("λ: ", AppData::data.param_l, 5., 20., 1.);
     let frag_param_k = labeled_slider!("K: ", AppData::data.param_k, 1., 3., 0.02);
     let frag_param_c = labeled_slider!("C: ", AppData::data.param_c, 1., 2., 0.1);
+    let frag_param_w = labeled_slider!("Ω: ", AppData::data.param_w, 0.1, 1., 0.1);
 
     let frag_options = div((
         frag_p1_x,
@@ -242,6 +249,7 @@ fn memoized_app_logic(data: &AppData) -> MemoizedState {
         frag_param_l,
         frag_param_k,
         frag_param_c,
+        frag_param_w,
     ))
     .id("options");
 

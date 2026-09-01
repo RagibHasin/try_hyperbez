@@ -148,35 +148,32 @@ pub fn solve(
     param_l: f64,
     param_k: f64,
     param_c: f64,
+    param_w: f64,
 ) -> Result<HyperbezParams<f64>, String> {
     let l0 = cb.p1.to_vec2();
     let l1 = cb.p3 - cb.p2;
 
-    let mut err = String::new();
-    for i in 0..14 {
-        let loosening = 0.98.powi(i);
+    let penalty = if l0.y.signum() != l1.y.signum() {
+        1.
+    } else {
+        let angle_part = 1. - l0.dot(-l1) / (l0.length() * l1.length());
+        let length_part = (l0.length() - 1.).max(0.) + (l1.length() - 1.).max(0.);
+        1. + param_w * angle_part * length_part
+    };
+    tracing::trace!(%l0, %l1, penalty);
 
-        let [q0, q1] = [l0, l1].map(|l| {
-            let u = param_u0 + l.length() * param_c * (1. + param_eps.exp2() + l.angle().cos());
-            let lg_u = u.log2();
-            let x = param_k * lg_u * loosening;
-            let lg_q = x / (1. + (x / param_l).powi(4)).powf(0.25);
-            lg_q.exp2()
-        });
+    let [q0, q1] = [l0, l1].map(|l| {
+        let u = param_u0 + l.length() * param_c * (1. + param_eps.exp2() + l.angle().cos());
+        let lg_u = u.log2();
+        let x = param_k * lg_u / penalty;
+        let lg_q = x / (1. + (x / param_l).powi(4)).powf(0.25);
+        lg_q.exp2()
+    });
 
-        let qm = 1. / q0.sqrt() + 1. / q1.sqrt() - (q0 * q1).sqrt();
+    let qm = 1. / q0.sqrt() + 1. / q1.sqrt() - (q0 * q1).sqrt();
 
-        let c = (q0 - 2. * qm + q1) / q0;
-        let d = 2. * (qm - q0) / q0;
+    let c = (q0 - 2. * qm + q1) / q0;
+    let d = 2. * (qm - q0) / q0;
 
-        match fit_ab(c, d, l0, l1) {
-            Ok([a, b]) => {
-                tracing::trace!(i, "fitted");
-                return Ok(HyperbezParams::new(a, b, c, d));
-            }
-            Err(e) => err = e,
-        }
-    }
-
-    Err(err)
+    fit_ab(c, d, l0, l1).map(|[a, b]| HyperbezParams::new(a, b, c, d))
 }
